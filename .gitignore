@@ -29,7 +29,6 @@ coverage.out
 coverage.html
 
 superpowers
-!docs/superpowers
 .omc
 
 coverage_new.out
@@ -45,3 +44,4 @@ coverage_new.out
 
 .github/pr-assets/
 build/windows/installer/tmp/
+.gocache/
