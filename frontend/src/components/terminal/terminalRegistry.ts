@@ -4,15 +4,17 @@ import { SearchAddon } from "@xterm/addon-search";
 import "@xterm/xterm/css/xterm.css";
 import { WriteSSH } from "../../../wailsjs/go/app/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
-import { bytesToBase64 } from "@/lib/terminalEncode";
+import { base64ToBytes, bytesToBase64 } from "@/lib/terminalEncode";
 import { useTerminalStore } from "@/stores/terminalStore";
-import { DEFAULT_TERMINAL_FONT_FAMILY } from "@/stores/terminalThemeStore";
+import { DEFAULT_TERMINAL_FONT_FAMILY, useTerminalThemeStore } from "@/stores/terminalThemeStore";
+import { TerminalImageController } from "./terminalImageProtocol";
 
 export interface TerminalInstance {
   term: XTerminal;
   fitAddon: FitAddon;
   searchAddon: SearchAddon;
   container: HTMLDivElement;
+  imageController: TerminalImageController;
 }
 
 interface InternalInstance extends TerminalInstance {
@@ -47,6 +49,8 @@ export function getOrCreateTerminal(
   term.loadAddon(fitAddon);
   term.loadAddon(searchAddon);
   term.open(container);
+  const imageController = new TerminalImageController(sessionId, term);
+  imageController.setEnabled(useTerminalThemeStore.getState().enableImagePreview);
 
   const onDataDispose = term.onData((data) => {
     WriteSSH(sessionId, bytesToBase64(new TextEncoder().encode(data))).catch(console.error);
@@ -54,14 +58,12 @@ export function getOrCreateTerminal(
 
   const dataEvent = "ssh:data:" + sessionId;
   EventsOn(dataEvent, (dataB64: string) => {
-    const binary = atob(dataB64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    term.write(bytes);
+    term.write(imageController.processIncoming(base64ToBytes(dataB64)));
   });
 
   const closedEvent = "ssh:closed:" + sessionId;
   EventsOn(closedEvent, () => {
+    imageController.clearAllImages();
     term.write("\r\n\x1b[31m[Connection closed]\x1b[0m\r\n");
     useTerminalStore.getState().markClosed(sessionId);
   });
@@ -71,10 +73,12 @@ export function getOrCreateTerminal(
     fitAddon,
     searchAddon,
     container,
+    imageController,
     dispose: () => {
       onDataDispose.dispose();
       EventsOff(dataEvent);
       EventsOff(closedEvent);
+      imageController.dispose();
       term.dispose();
       registry.delete(sessionId);
     },

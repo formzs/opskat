@@ -140,6 +140,10 @@ func TestManager_ConnectInvalidAuth(t *testing.T) {
 	})
 }
 
+func TestSSHTerminalTypeUsesCompatibleDefault(t *testing.T) {
+	assert.Equal(t, "xterm-256color", sshTerminalType)
+}
+
 func TestManager_GetSessionSyncStateReturnsDirSyncCodeWhenSessionMissing(t *testing.T) {
 	m := NewManager()
 

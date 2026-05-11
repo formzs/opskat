@@ -914,6 +914,8 @@
     "scrollback": "回滚缓冲区",
     "scrollbackUnit": "行",
     "scrollbackHint": "终端可向上回滚的最大行数，越大越占内存（范围 100 - 1000000）",
+    "imagePreview": "启用 yazi 图片预览",
+    "imagePreviewHint": "实验功能，首期支持 Kitty unicode placeholders 协议",
     "default": "默认",
     "builtinThemes": "预置配色",
     "customThemes": "自定义配色",

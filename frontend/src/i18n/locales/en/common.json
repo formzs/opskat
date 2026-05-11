@@ -929,6 +929,8 @@
     "scrollback": "Scrollback",
     "scrollbackUnit": "lines",
     "scrollbackHint": "Maximum lines retained for scrolling back. Larger values use more memory (range 100 - 1000000).",
+    "imagePreview": "Enable yazi image preview",
+    "imagePreviewHint": "Experimental support for Kitty unicode placeholders",
     "default": "Default",
     "builtinThemes": "Built-in Themes",
     "customThemes": "Custom Themes",

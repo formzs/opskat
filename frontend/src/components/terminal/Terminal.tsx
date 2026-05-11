@@ -37,6 +37,7 @@ interface TerminalProps {
 export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal({ sessionId, active, tabId }, ref) {
   const { t } = useTranslation();
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
@@ -47,6 +48,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const fontSize = useTerminalThemeStore((s) => s.fontSize);
   const fontFamily = useTerminalThemeStore((s) => s.fontFamily);
   const scrollback = useTerminalThemeStore((s) => s.scrollback);
+  const enableImagePreview = useTerminalThemeStore((s) => s.enableImagePreview);
   const selectedThemeId = useTerminalThemeStore((s) => s.selectedThemeId);
   const customThemes = useTerminalThemeStore((s) => s.customThemes);
   const resolvedTheme = useResolvedTheme();
@@ -58,6 +60,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       builtinThemes.find((t) => t.id === selectedThemeId) || customThemes.find((t) => t.id === selectedThemeId);
     return theme ? toXtermTheme(theme) : undefined;
   }, [selectedThemeId, customThemes, resolvedTheme]);
+  const initOptionsRef = useRef({ fontFamily, fontSize, scrollback, theme: xtermTheme });
+  initOptionsRef.current = { fontFamily, fontSize, scrollback, theme: xtermTheme };
 
   useImperativeHandle(ref, () => ({
     toggleSearch: () => setShowSearch((v) => !v),
@@ -87,7 +91,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
-    const inst = getOrCreateTerminal(sessionId, { fontSize, fontFamily, theme: xtermTheme, scrollback });
+    const inst = getOrCreateTerminal(sessionId, initOptionsRef.current);
     termRef.current = inst.term;
     fitAddonRef.current = inst.fitAddon;
     searchAddonRef.current = inst.searchAddon;
@@ -97,9 +101,13 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     // registry, not in this component — so split-pane re-renders that unmount
     // this component don't destroy scrollback.
     wrapper.appendChild(inst.container);
+    if (overlayRef.current) {
+      inst.imageController.attachOverlay(overlayRef.current, wrapper);
+    }
 
     requestAnimationFrame(() => {
       inst.fitAddon.fit();
+      inst.imageController.requestRender();
     });
 
     inst.term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
@@ -131,6 +139,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       resizeTimer = window.setTimeout(() => {
         if (!activeRef.current) return;
         inst.fitAddon.fit();
+        inst.imageController.requestRender();
         const dims = inst.fitAddon.proposeDimensions();
         if (dims) {
           ResizeSSH(sessionId, dims.cols, dims.rows).catch(console.error);
@@ -151,6 +160,9 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         // Drop key handler so its closures can be GC'd; xterm only stores one slot.
         inst.term.attachCustomKeyEventHandler(() => true);
       }
+      if (overlayRef.current) {
+        inst.imageController.detachOverlay(overlayRef.current);
+      }
       if (inst.container.parentElement === wrapper) {
         wrapper.removeChild(inst.container);
       }
@@ -158,17 +170,24 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       fitAddonRef.current = null;
       searchAddonRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   useEffect(() => {
-    if (!termRef.current) return;
+    const inst = getTerminalInstance(sessionId);
+    if (!termRef.current || !inst) return;
     termRef.current.options.theme = xtermTheme;
     termRef.current.options.fontSize = fontSize;
     termRef.current.options.fontFamily = fontFamily;
     termRef.current.options.scrollback = scrollback;
     fitAddonRef.current?.fit();
-  }, [xtermTheme, fontSize, fontFamily, scrollback]);
+    inst.imageController.requestRender();
+  }, [sessionId, xtermTheme, fontSize, fontFamily, scrollback]);
+
+  useEffect(() => {
+    const inst = getTerminalInstance(sessionId);
+    if (!inst) return;
+    inst.imageController.setEnabled(enableImagePreview);
+  }, [sessionId, enableImagePreview]);
 
   useEffect(() => {
     activeRef.current = active;
@@ -178,10 +197,11 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     if (active) {
       requestAnimationFrame(() => {
         fitAddonRef.current?.fit();
+        getTerminalInstance(sessionId)?.imageController.requestRender();
         termRef.current?.focus();
       });
     }
-  }, [active]);
+  }, [active, sessionId]);
 
   const paneConnected = useTerminalStore((s) => s.tabData[tabId]?.panes[sessionId]?.connected ?? false);
   const splitPane = useTerminalStore((s) => s.splitPane);
@@ -208,7 +228,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         }}
       >
         <ContextMenuTrigger className="flex-1 min-h-0">
-          <div ref={wrapperRef} className="h-full w-full" style={{ padding: "4px" }} />
+          <div ref={wrapperRef} className="relative h-full w-full" style={{ padding: "4px" }}>
+            {/* Keep the image layer above xterm's canvases and decoration layers. */}
+            <div ref={overlayRef} className="pointer-events-none absolute inset-0 z-20 overflow-hidden" />
+          </div>
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem onClick={handleCopy} disabled={!hasSelection}>

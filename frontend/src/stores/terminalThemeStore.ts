@@ -90,11 +90,13 @@ interface TerminalThemeState {
   fontPresetId: string;
   fontFamily: string;
   scrollback: number;
+  enableImagePreview: boolean;
 
   setSelectedThemeId: (id: string) => void;
   setFontSize: (size: number) => void;
   setFontPresetId: (presetId: string) => void;
   setScrollback: (lines: number) => void;
+  setEnableImagePreview: (enabled: boolean) => void;
   addCustomTheme: (theme: TerminalTheme) => void;
   updateCustomTheme: (theme: TerminalTheme) => void;
   removeCustomTheme: (id: string) => void;
@@ -110,6 +112,7 @@ export const useTerminalThemeStore = create<TerminalThemeState>()(
       fontPresetId: DEFAULT_TERMINAL_FONT_PRESET_ID,
       fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
       scrollback: SCROLLBACK_DEFAULT,
+      enableImagePreview: true,
 
       setSelectedThemeId: (id) => set({ selectedThemeId: id }),
 
@@ -124,6 +127,8 @@ export const useTerminalThemeStore = create<TerminalThemeState>()(
         const n = Number.isFinite(lines) ? Math.floor(lines) : SCROLLBACK_DEFAULT;
         set({ scrollback: Math.max(SCROLLBACK_MIN, Math.min(SCROLLBACK_MAX, n)) });
       },
+
+      setEnableImagePreview: (enabled) => set({ enableImagePreview: enabled }),
 
       addCustomTheme: (theme) =>
         set((state) => ({
@@ -153,7 +158,7 @@ export const useTerminalThemeStore = create<TerminalThemeState>()(
     }),
     {
       name: "terminal_theme",
-      version: 2,
+      version: 3,
       migrate: (persistedState: unknown) => {
         return normalizeFontPresetState((persistedState as Partial<TerminalThemeState> | undefined) || {});
       },

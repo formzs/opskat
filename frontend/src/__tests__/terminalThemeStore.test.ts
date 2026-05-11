@@ -44,6 +44,7 @@ describe("terminalThemeStore", () => {
       fontPresetId: DEFAULT_TERMINAL_FONT_PRESET_ID,
       fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
       scrollback: SCROLLBACK_DEFAULT,
+      enableImagePreview: true,
     });
   });
 
@@ -101,8 +102,9 @@ describe("terminalThemeStore", () => {
             fontPresetId: "consolas",
             fontFamily: "'Consolas', monospace",
             scrollback: SCROLLBACK_DEFAULT,
+            enableImagePreview: false,
           },
-          version: 2,
+          version: 3,
         })
       );
 
@@ -111,6 +113,14 @@ describe("terminalThemeStore", () => {
 
       expect(useTerminalThemeStore.getState().fontPresetId).toBe(DEFAULT_TERMINAL_FONT_PRESET_ID);
       expect(useTerminalThemeStore.getState().fontFamily).toBe(DEFAULT_TERMINAL_FONT_FAMILY);
+      expect(useTerminalThemeStore.getState().enableImagePreview).toBe(false);
+    });
+  });
+
+  describe("setEnableImagePreview", () => {
+    it("toggles the preview feature flag", () => {
+      useTerminalThemeStore.getState().setEnableImagePreview(false);
+      expect(useTerminalThemeStore.getState().enableImagePreview).toBe(false);
     });
   });
 

@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
   Separator,
+  Switch,
 } from "@opskat/ui";
 import { useTheme, useResolvedTheme } from "@/components/theme-provider";
 import { Plus, Pencil, Trash2 } from "lucide-react";
@@ -105,6 +106,8 @@ export function TerminalSection() {
     setFontPresetId,
     scrollback,
     setScrollback,
+    enableImagePreview,
+    setEnableImagePreview,
     customThemes,
     addCustomTheme,
     updateCustomTheme,
@@ -169,6 +172,14 @@ export function TerminalSection() {
               <span className="text-sm text-muted-foreground">{t("terminal.scrollbackUnit")}</span>
             </div>
             <p className="text-xs text-muted-foreground">{t("terminal.scrollbackHint")}</p>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2">
+            <div className="space-y-1">
+              <Label>{t("terminal.imagePreview")}</Label>
+              <p className="text-xs text-muted-foreground">{t("terminal.imagePreviewHint")}</p>
+            </div>
+            <Switch checked={enableImagePreview} onCheckedChange={setEnableImagePreview} />
           </div>
 
           <Separator />

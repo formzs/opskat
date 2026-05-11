@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ScrollText, Square, Play } from "lucide-react";
 import { StartK8sPodLogs, StopK8sPodLogs } from "../../../wailsjs/go/app/App";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
+import { base64ToBytes } from "@/lib/terminalEncode";
 import { K8sSectionCard } from "./K8sSectionCard";
 import { K8sLogTerminal, type K8sLogTerminalHandle } from "./K8sLogTerminal";
 
@@ -27,15 +28,6 @@ export type LogTabStateUpdate = Partial<LogTabState> | ((prev: LogTabState) => L
 
 export function buildLogBufferKey(podName: string, container: string, tailLines: number) {
   return `${podName}::${container}::${tailLines}`;
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }
 
 interface K8sLogsPanelProps {

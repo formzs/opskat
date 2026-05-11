@@ -18,6 +18,8 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+const sshTerminalType = "xterm-256color"
+
 // sharedClient 封装 SSH 连接，支持引用计数共享
 type sharedClient struct {
 	client   *ssh.Client
@@ -295,7 +297,9 @@ func (m *Manager) createSession(shared *sharedClient, assetID int64, cols, rows 
 	if rows <= 0 {
 		rows = 24
 	}
-	if err := session.RequestPty("xterm-256color", rows, cols, ssh.TerminalModes{
+	// Keep the PTY identifier on the broad compatibility path; image probes
+	// are handled by the frontend terminal protocol layer.
+	if err := session.RequestPty(sshTerminalType, rows, cols, ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
