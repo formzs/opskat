@@ -566,15 +566,22 @@ function convertDisplayMessages(displayMsgs: app.ConversationDisplayMessage[]): 
     id: crypto.randomUUID(),
     role: dm.role as "user" | "assistant" | "tool",
     content: dm.content,
-    blocks: (dm.blocks || []).map((b: conversation_entity.ContentBlock) => ({
-      type: b.type as ContentBlock["type"],
-      content: b.content,
-      toolName: b.toolName,
-      toolInput: b.toolInput,
-      status: b.status as ContentBlock["status"],
-      errorKind: b.errorKind as ErrorKind | undefined,
-      errorDetail: b.errorDetail,
-    })),
+    blocks: (dm.blocks || []).map((rawBlock: conversation_entity.ContentBlock) => {
+      const b = rawBlock as conversation_entity.ContentBlock & {
+        errorKind?: ErrorKind;
+        errorDetail?: string;
+      };
+
+      return {
+        type: b.type as ContentBlock["type"],
+        content: b.content,
+        toolName: b.toolName,
+        toolInput: b.toolInput,
+        status: b.status as ContentBlock["status"],
+        errorKind: b.errorKind,
+        errorDetail: b.errorDetail,
+      };
+    }),
     tokenUsage: dm.tokenUsage
       ? {
           inputTokens: dm.tokenUsage.inputTokens,
