@@ -7,6 +7,7 @@ import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { base64ToBytes, bytesToBase64 } from "@/lib/terminalEncode";
 import { useTerminalStore } from "@/stores/terminalStore";
 import { DEFAULT_TERMINAL_FONT_FAMILY, useTerminalThemeStore } from "@/stores/terminalThemeStore";
+import i18n from "@/i18n";
 import { TerminalImageController } from "./terminalImageProtocol";
 
 export interface TerminalInstance {
@@ -18,6 +19,7 @@ export interface TerminalInstance {
 }
 
 interface InternalInstance extends TerminalInstance {
+  isClosed: boolean;
   dispose: () => void;
 }
 
@@ -62,11 +64,7 @@ export function getOrCreateTerminal(
   });
 
   const closedEvent = "ssh:closed:" + sessionId;
-  EventsOn(closedEvent, () => {
-    imageController.clearAllImages();
-    term.write("\r\n\x1b[31m[Connection closed]\x1b[0m\r\n");
-    useTerminalStore.getState().markClosed(sessionId);
-  });
+  let onKeyDispose: { dispose: () => void };
 
   const instance: InternalInstance = {
     term,
@@ -74,8 +72,10 @@ export function getOrCreateTerminal(
     searchAddon,
     container,
     imageController,
+    isClosed: false,
     dispose: () => {
       onDataDispose.dispose();
+      onKeyDispose.dispose();
       EventsOff(dataEvent);
       EventsOff(closedEvent);
       imageController.dispose();
@@ -83,6 +83,21 @@ export function getOrCreateTerminal(
       registry.delete(sessionId);
     },
   };
+
+  onKeyDispose = term.onKey(({ key }) => {
+    if (instance.isClosed && key === "\r") {
+      instance.isClosed = false;
+      useTerminalStore.getState().reconnectBySession(sessionId);
+    }
+  });
+
+  EventsOn(closedEvent, () => {
+    imageController.clearAllImages();
+    const hint = i18n.t("ssh.session.closedHint");
+    term.write(`\r\n\x1b[31m${hint}\x1b[0m\r\n`);
+    useTerminalStore.getState().markClosed(sessionId);
+    instance.isClosed = true;
+  });
 
   registry.set(sessionId, instance);
   return instance;

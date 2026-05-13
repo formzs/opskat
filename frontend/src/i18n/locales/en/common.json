@@ -567,7 +567,8 @@
       "splitH": "Split Horizontal",
       "splitV": "Split Vertical",
       "connected": "Connected",
-      "disconnected": "Disconnected"
+      "disconnected": "Disconnected",
+      "closedHint": "[Connection closed — press Enter to reconnect]"
     },
     "contextMenu": {
       "copy": "Copy",
@@ -777,6 +778,10 @@
     "approvalAllowAll": "Allow All",
     "approvalDenied": "Denied",
     "approvalReasonLabel": "Reason: ",
+    "approvalLocalToolTitle": "AI wants to run local {{tool}} tool",
+    "approvalLocalToolContentPreview": "Show content to write",
+    "approvalLocalToolEditPreview": "Show edit preview",
+    "approvalLocalToolPatternHint": "One pattern per line; * wildcards (bash matches commands, write/edit matches paths).",
     "permissionRequestHint": "AI is requesting command execution permission. You can edit the pattern before approving.",
     "permissionPatternPlaceholder": "Command pattern, supports * wildcard",
     "permissionApprove": "Approve",
@@ -924,6 +929,10 @@
   "terminal": {
     "title": "Terminal",
     "desc": "Terminal color scheme and font settings",
+    "fontFamily": "Font",
+    "defaultFont": "Default Font",
+    "customFont": "Custom",
+    "customFontPlaceholder": "Enter font-family, e.g. Iosevka Term, monospace",
     "fontSize": "Font Size",
     "fontPreset": "Font Preset",
     "scrollback": "Scrollback",
