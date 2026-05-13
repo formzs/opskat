@@ -7,7 +7,10 @@ import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { base64ToBytes, bytesToBase64 } from "@/lib/terminalEncode";
 import { useTerminalStore } from "@/stores/terminalStore";
 import { DEFAULT_TERMINAL_FONT_FAMILY, useTerminalThemeStore } from "@/stores/terminalThemeStore";
+import { useShortcutStore } from "@/stores/shortcutStore";
+import { withTerminalFontFallback } from "@/data/terminalFonts";
 import i18n from "@/i18n";
+import { createTerminalInputBridge, type TerminalInputBridge } from "./terminalInputBridge";
 import { TerminalImageController } from "./terminalImageProtocol";
 
 export interface TerminalInstance {
@@ -16,6 +19,7 @@ export interface TerminalInstance {
   searchAddon: SearchAddon;
   container: HTMLDivElement;
   imageController: TerminalImageController;
+  bridge: TerminalInputBridge;
 }
 
 interface InternalInstance extends TerminalInstance {
@@ -41,7 +45,7 @@ export function getOrCreateTerminal(
   const term = new XTerminal({
     cursorBlink: true,
     fontSize: init.fontSize,
-    fontFamily: init.fontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
+    fontFamily: withTerminalFontFallback(init.fontFamily || DEFAULT_TERMINAL_FONT_FAMILY),
     theme: init.theme,
     scrollback: init.scrollback,
   });
@@ -53,6 +57,15 @@ export function getOrCreateTerminal(
   term.open(container);
   const imageController = new TerminalImageController(sessionId, term);
   imageController.setEnabled(useTerminalThemeStore.getState().enableImagePreview);
+
+  // 单一 keyboard 处理入口：IME 守卫 + shortcut 拦截 + Cmd+C 选区复制。
+  // 占位回调由 Terminal.tsx 在挂载时通过 setOnFilter/setOnCopy 注入。
+  const bridge = createTerminalInputBridge({
+    term,
+    shortcuts: useShortcutStore.getState().shortcuts,
+    onFilter: () => {},
+    onCopy: () => false,
+  });
 
   const onDataDispose = term.onData((data) => {
     WriteSSH(sessionId, bytesToBase64(new TextEncoder().encode(data))).catch(console.error);
@@ -72,8 +85,12 @@ export function getOrCreateTerminal(
     searchAddon,
     container,
     imageController,
+    bridge,
     isClosed: false,
     dispose: () => {
+      // bridge 持有 term.attachCustomKeyEventHandler 槽位的还原逻辑,
+      // 必须在 term.dispose 之前调用,避免 dispose 后访问已释放对象。
+      bridge.dispose();
       onDataDispose.dispose();
       onKeyDispose.dispose();
       EventsOff(dataEvent);
