@@ -2,7 +2,7 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState,
 import type { Terminal as XTerminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
-import { WriteSSH, ResizeSSH } from "../../../wailsjs/go/app/App";
+import { WriteSSH, WriteSerial, ResizeSSH, ResizeSerialTerminal } from "../../../wailsjs/go/app/App";
 import { useShortcutStore, formatBinding, formatModKey } from "@/stores/shortcutStore";
 import { useTerminalStore } from "@/stores/terminalStore";
 import { useTerminalThemeStore, toXtermTheme } from "@/stores/terminalThemeStore";
@@ -49,9 +49,12 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const fontFamily = useTerminalThemeStore((s) => s.fontFamily);
   const scrollback = useTerminalThemeStore((s) => s.scrollback);
   const enableImagePreview = useTerminalThemeStore((s) => s.enableImagePreview);
+  const webglEnabled = useTerminalThemeStore((s) => s.webglEnabled);
   const selectedThemeId = useTerminalThemeStore((s) => s.selectedThemeId);
   const customThemes = useTerminalThemeStore((s) => s.customThemes);
   const resolvedTheme = useResolvedTheme();
+  const transport = useTerminalStore((s) => s.tabData[tabId]?.panes[sessionId]?.transport ?? "ssh");
+  const isSerial = transport === "serial";
   const xtermTheme = useMemo(() => {
     if (selectedThemeId === "default") {
       return resolvedTheme === "light" ? toXtermTheme(defaultLightTheme) : toXtermTheme(defaultDarkTheme);
@@ -60,8 +63,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       builtinThemes.find((t) => t.id === selectedThemeId) || customThemes.find((t) => t.id === selectedThemeId);
     return theme ? toXtermTheme(theme) : undefined;
   }, [selectedThemeId, customThemes, resolvedTheme]);
-  const initOptionsRef = useRef({ fontFamily, fontSize, scrollback, theme: xtermTheme });
-  initOptionsRef.current = { fontFamily, fontSize, scrollback, theme: xtermTheme };
 
   useImperativeHandle(ref, () => ({
     toggleSearch: () => setShowSearch((v) => !v),
@@ -78,10 +79,11 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const handlePaste = useCallback(() => {
     navigator.clipboard.readText().then((text) => {
       if (text && termRef.current) {
-        WriteSSH(sessionId, bytesToBase64(new TextEncoder().encode(text))).catch(console.error);
+        const writeFn = isSerial ? WriteSerial : WriteSSH;
+        writeFn(sessionId, bytesToBase64(new TextEncoder().encode(text))).catch(console.error);
       }
     });
-  }, [sessionId]);
+  }, [isSerial, sessionId]);
 
   const handleSelectAll = useCallback(() => {
     termRef.current?.selectAll();
@@ -91,15 +93,18 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
-    const inst = getOrCreateTerminal(sessionId, initOptionsRef.current);
+    const inst = getOrCreateTerminal(sessionId, {
+      fontSize,
+      fontFamily,
+      theme: xtermTheme,
+      scrollback,
+      transport,
+      webglEnabled,
+    });
     termRef.current = inst.term;
     fitAddonRef.current = inst.fitAddon;
     searchAddonRef.current = inst.searchAddon;
 
-    // Attach the persistent host into the React-managed wrapper. Xterm content
-    // survives because both the host element and the XTerminal live in the
-    // registry, not in this component — so split-pane re-renders that unmount
-    // this component don't destroy scrollback.
     wrapper.appendChild(inst.container);
     if (overlayRef.current) {
       inst.imageController.attachOverlay(overlayRef.current, wrapper);
@@ -136,7 +141,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         inst.imageController.requestRender();
         const dims = inst.fitAddon.proposeDimensions();
         if (dims) {
-          ResizeSSH(sessionId, dims.cols, dims.rows).catch(console.error);
+          const resizeFn = isSerial ? ResizeSerialTerminal : ResizeSSH;
+          resizeFn(sessionId, dims.cols, dims.rows).catch(console.error);
         }
       }, 50);
     });
@@ -146,13 +152,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       clearTimeout(resizeTimer);
       selDispose.dispose();
       resizeObserver.disconnect();
-      // If the registry already disposed this session (e.g. closePane / reconnect /
-      // tab close ran before this cleanup), the xterm instance is destroyed —
-      // skip any term operations and just detach.
       const stillAlive = getTerminalInstance(sessionId) === inst;
       if (stillAlive) {
-        // Drop callback closures so toast/setShowSearch can be GC'd;
-        // bridge keeps a single handler slot, just reset to no-ops.
         inst.bridge.setOnFilter(() => {});
         inst.bridge.setOnCopy(() => false);
       }
@@ -166,7 +167,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       fitAddonRef.current = null;
       searchAddonRef.current = null;
     };
-  }, [sessionId]);
+  }, [fontFamily, fontSize, isSerial, scrollback, sessionId, transport, webglEnabled, xtermTheme]);
 
   useEffect(() => {
     const inst = getTerminalInstance(sessionId);
@@ -230,7 +231,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       >
         <ContextMenuTrigger className="flex-1 min-h-0">
           <div ref={wrapperRef} className="relative h-full w-full" style={{ padding: "4px" }}>
-            {/* Keep the image layer above xterm's canvases and decoration layers. */}
             <div ref={overlayRef} className="pointer-events-none absolute inset-0 z-20 overflow-hidden" />
           </div>
         </ContextMenuTrigger>
@@ -253,24 +253,24 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
             <ContextMenuShortcut>{formatBinding(shortcuts["panel.filter"])}</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => splitPane(tabId, "horizontal")} disabled={!paneConnected}>
+          <ContextMenuItem onClick={() => splitPane(tabId, "horizontal")} disabled={!paneConnected || isSerial}>
             {t("ssh.session.splitH")}
             <ContextMenuShortcut>{formatBinding(shortcuts["split.horizontal"])}</ContextMenuShortcut>
           </ContextMenuItem>
-          <ContextMenuItem onClick={() => splitPane(tabId, "vertical")} disabled={!paneConnected}>
+          <ContextMenuItem onClick={() => splitPane(tabId, "vertical")} disabled={!paneConnected || isSerial}>
             {t("ssh.session.splitV")}
             <ContextMenuShortcut>{formatBinding(shortcuts["split.vertical"])}</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => toggleFileManager(tabId)}>{t("ssh.contextMenu.sftp")}</ContextMenuItem>
+          {!isSerial && (
+            <ContextMenuItem onClick={() => toggleFileManager(tabId)}>{t("ssh.contextMenu.sftp")}</ContextMenuItem>
+          )}
           <ContextMenuItem onClick={() => reconnect(tabId)}>{t("ssh.session.reconnect")}</ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => closePane(tabId, sessionId)}>
-            {t("ssh.contextMenu.closePane")}
-          </ContextMenuItem>
+          <ContextMenuItem onClick={() => closePane(tabId, sessionId)}>{t("ssh.contextMenu.closePane")}</ContextMenuItem>
           <ContextMenuItem onClick={() => closeTab(tabId)} variant="destructive">
             {t("ssh.contextMenu.closeTab")}
-            <ContextMenuShortcut>{formatBinding(shortcuts["tab.close"])}</ContextMenuShortcut>
+            <ContextMenuShortcut>{formatBinding(shortcuts["tab.close"])} </ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

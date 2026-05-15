@@ -28,6 +28,7 @@
     "mongodb": "MongoDB",
     "kafka": "Kafka",
     "k8s": "K8S Cluster",
+    "serial": "Serial Port",
     "sshKeys": "Credentials",
     "settings": "Settings",
     "appearance": "Appearance",
@@ -88,6 +89,7 @@
     "moveToEnd": "Move to End"
   },
   "theme": {
+    "label": "Theme",
     "toggle": "Toggle theme",
     "light": "Light",
     "dark": "Dark",
@@ -99,6 +101,7 @@
     "en": "English"
   },
   "appearance": {
+    "title": "Appearance",
     "startupTab": "Open on Startup",
     "startupTabLast": "Remember Last Tab",
     "startupTabHome": "Home"
@@ -208,6 +211,8 @@
     "testConnectionSuccess": "Connection successful",
     "testConnectionFailed": "Connection failed",
     "testing": "Testing...",
+    "cancelTest": "Cancel",
+    "testCancelled": "Test cancelled",
     "moveUp": "Move Up",
     "moveDown": "Move Down",
     "moveTop": "Move to Top",
@@ -218,6 +223,7 @@
     "typeMongoDB": "MongoDB",
     "typeKafka": "Kafka",
     "typeK8s": "K8S Cluster",
+    "typeSerial": "Serial Port",
     "driver": "Database Driver",
     "driverMySQL": "MySQL",
     "driverPostgreSQL": "PostgreSQL",
@@ -303,6 +309,17 @@
     "k8sEnterKubeconfig": "Enter kubeconfig",
     "k8sClusterInfo": "Cluster Info",
     "k8sClusterOverview": "Cluster Overview",
+    "serialTitle": "Serial",
+    "serialPortPath": "Port Path",
+    "serialPortPathPlaceholder": "e.g. COM3, /dev/ttyUSB0",
+    "serialBaudRate": "Baud Rate",
+    "serialDataBits": "Data Bits",
+    "serialStopBits": "Stop Bits",
+    "serialParity": "Parity",
+    "serialFlowControl": "Flow Control",
+    "serialRefreshPorts": "Refresh Ports",
+    "serialNoPortsDetected": "No ports detected",
+    "serialManualInput": "Enter path manually",
     "k8sVersion": "Version",
     "k8sPlatform": "Platform",
     "k8sNodes": "Nodes",
@@ -556,6 +573,7 @@
       "retry": "Reconnect",
       "steps": {
         "resolve": "Resolve",
+        "open": "Open",
         "connect": "Connect",
         "auth": "Auth",
         "shell": "Shell"
@@ -925,6 +943,13 @@
     "showSidebar": "Show Toolbar",
     "showAIPanel": "Show AI Assistant"
   },
+  "topBar": {
+    "searchPlaceholder": "Search assets or commands...",
+    "hideAssetTree": "Hide Asset Tree",
+    "showAssetTree": "Show Asset Tree",
+    "hideAIPanel": "Hide AI Chat",
+    "showAIPanel": "Show AI Chat"
+  },
   "sideTabs": {
     "title": "Open Tabs",
     "filterPlaceholder": "Filter tabs...",
@@ -945,6 +970,8 @@
     "desc": "Terminal color scheme and font settings",
     "fontFamily": "Font",
     "defaultFont": "Default Font",
+    "fontRecommended": "Recommended",
+    "fontOther": "Other",
     "customFont": "Custom",
     "customFontPlaceholder": "Enter font-family, e.g. Iosevka Term, monospace",
     "fontSize": "Font Size",
@@ -954,6 +981,8 @@
     "scrollbackHint": "Maximum lines retained for scrolling back. Larger values use more memory (range 100 - 1000000).",
     "imagePreview": "Enable yazi image preview",
     "imagePreviewHint": "Experimental support for Kitty unicode placeholders",
+    "gpuAcceleration": "GPU Acceleration",
+    "gpuAccelerationHint": "Use WebGL to render the terminal. Auto-disables on init failure.",
     "default": "Default",
     "builtinThemes": "Built-in Themes",
     "customThemes": "Custom Themes",

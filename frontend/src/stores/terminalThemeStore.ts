@@ -91,12 +91,14 @@ interface TerminalThemeState {
   fontFamily: string;
   scrollback: number;
   enableImagePreview: boolean;
+  webglEnabled: boolean;
 
   setSelectedThemeId: (id: string) => void;
   setFontSize: (size: number) => void;
   setFontPresetId: (presetId: string) => void;
   setScrollback: (lines: number) => void;
   setEnableImagePreview: (enabled: boolean) => void;
+  setWebglEnabled: (enabled: boolean) => void;
   addCustomTheme: (theme: TerminalTheme) => void;
   updateCustomTheme: (theme: TerminalTheme) => void;
   removeCustomTheme: (id: string) => void;
@@ -113,40 +115,33 @@ export const useTerminalThemeStore = create<TerminalThemeState>()(
       fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
       scrollback: SCROLLBACK_DEFAULT,
       enableImagePreview: true,
+      webglEnabled: true,
 
       setSelectedThemeId: (id) => set({ selectedThemeId: id }),
-
+      setWebglEnabled: (enabled) => set({ webglEnabled: enabled }),
       setFontSize: (size) => set({ fontSize: Math.max(8, Math.min(32, size)) }),
-
       setFontPresetId: (presetId) => {
         const preset = resolveFontPreset(presetId);
         set({ fontPresetId: preset.id, fontFamily: preset.family });
       },
-
       setScrollback: (lines) => {
         const n = Number.isFinite(lines) ? Math.floor(lines) : SCROLLBACK_DEFAULT;
         set({ scrollback: Math.max(SCROLLBACK_MIN, Math.min(SCROLLBACK_MAX, n)) });
       },
-
       setEnableImagePreview: (enabled) => set({ enableImagePreview: enabled }),
-
       addCustomTheme: (theme) =>
         set((state) => ({
           customThemes: [...state.customThemes, theme],
         })),
-
       updateCustomTheme: (theme) =>
         set((state) => ({
           customThemes: state.customThemes.map((t) => (t.id === theme.id ? theme : t)),
         })),
-
       removeCustomTheme: (id) =>
         set((state) => ({
           customThemes: state.customThemes.filter((t) => t.id !== id),
-          // 如果删除的是当前选中的，回退到默认
           selectedThemeId: state.selectedThemeId === id ? "default" : state.selectedThemeId,
         })),
-
       getActiveTheme: () => {
         const { selectedThemeId, customThemes } = get();
         return (
@@ -158,13 +153,20 @@ export const useTerminalThemeStore = create<TerminalThemeState>()(
     }),
     {
       name: "terminal_theme",
-      version: 3,
+      version: 4,
       migrate: (persistedState: unknown) => {
-        return normalizeFontPresetState((persistedState as Partial<TerminalThemeState> | undefined) || {});
+        const state = normalizeFontPresetState((persistedState as Partial<TerminalThemeState> | undefined) || {});
+        return {
+          webglEnabled: true,
+          enableImagePreview: true,
+          ...state,
+        };
       },
       merge: (persistedState, currentState) => {
         return {
           ...currentState,
+          webglEnabled: true,
+          enableImagePreview: true,
           ...normalizeFontPresetState((persistedState as Partial<TerminalThemeState> | undefined) || {}),
         };
       },

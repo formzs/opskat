@@ -108,6 +108,8 @@ export function TerminalSection() {
     setScrollback,
     enableImagePreview,
     setEnableImagePreview,
+    webglEnabled,
+    setWebglEnabled,
     customThemes,
     addCustomTheme,
     updateCustomTheme,
@@ -124,7 +126,6 @@ export function TerminalSection() {
           <CardTitle className="text-base">{t("terminal.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Font size */}
           <div className="grid gap-2">
             <Label>{t("terminal.fontSize")}</Label>
             <div className="flex items-center gap-2">
@@ -156,7 +157,6 @@ export function TerminalSection() {
             </Select>
           </div>
 
-          {/* Scrollback */}
           <div className="grid gap-2">
             <Label>{t("terminal.scrollback")}</Label>
             <div className="flex items-center gap-2">
@@ -182,13 +182,19 @@ export function TerminalSection() {
             <Switch checked={enableImagePreview} onCheckedChange={setEnableImagePreview} />
           </div>
 
+          <div className="flex items-start justify-between gap-4 rounded-md border px-3 py-2">
+            <div className="grid gap-1">
+              <Label>{t("terminal.gpuAcceleration")}</Label>
+              <p className="text-xs text-muted-foreground">{t("terminal.gpuAccelerationHint")}</p>
+            </div>
+            <Switch checked={webglEnabled} onCheckedChange={setWebglEnabled} />
+          </div>
+
           <Separator />
 
-          {/* Builtin themes */}
           <div className="space-y-2">
             <Label>{t("terminal.builtinThemes")}</Label>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-              {/* Default (follows app theme) */}
               <button
                 onClick={() => setSelectedThemeId("default")}
                 className={cn(
@@ -220,7 +226,6 @@ export function TerminalSection() {
                     selectedThemeId === bt.id && "ring-2 ring-primary"
                   )}
                 >
-                  {/* Color preview */}
                   <div className="rounded h-10 mb-1.5 flex items-end p-1 gap-0.5" style={{ background: bt.background }}>
                     {[bt.red, bt.green, bt.yellow, bt.blue, bt.magenta, bt.cyan].map((c, i) => (
                       <div key={i} className="w-2 h-3 rounded-sm" style={{ background: c }} />
@@ -234,7 +239,6 @@ export function TerminalSection() {
 
           <Separator />
 
-          {/* Custom themes */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>{t("terminal.customThemes")}</Label>
@@ -273,7 +277,6 @@ export function TerminalSection() {
                       ))}
                     </div>
                     <div className="text-xs truncate font-medium">{ct.name}</div>
-                    {/* Edit/Delete */}
                     <div className="absolute top-1 right-1 hidden group-hover:flex gap-0.5">
                       <button
                         className="rounded p-0.5 bg-background/80 hover:bg-muted"
@@ -303,7 +306,6 @@ export function TerminalSection() {
         </CardContent>
       </Card>
 
-      {/* Terminal theme editor */}
       <TerminalThemeEditor
         open={themeEditorOpen}
         onOpenChange={setThemeEditorOpen}

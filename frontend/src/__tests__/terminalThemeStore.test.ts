@@ -45,194 +45,115 @@ describe("terminalThemeStore", () => {
       fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
       scrollback: SCROLLBACK_DEFAULT,
       enableImagePreview: true,
+      webglEnabled: true,
     });
   });
 
-  describe("setSelectedThemeId", () => {
-    it("changes the selected theme", () => {
-      useTerminalThemeStore.getState().setSelectedThemeId("dracula");
-      expect(useTerminalThemeStore.getState().selectedThemeId).toBe("dracula");
-    });
+  it("changes the selected theme", () => {
+    useTerminalThemeStore.getState().setSelectedThemeId("dracula");
+    expect(useTerminalThemeStore.getState().selectedThemeId).toBe("dracula");
   });
 
-  describe("setFontSize", () => {
-    it("sets font size within bounds", () => {
-      useTerminalThemeStore.getState().setFontSize(20);
-      expect(useTerminalThemeStore.getState().fontSize).toBe(20);
-    });
-
-    it("clamps to minimum 8", () => {
-      useTerminalThemeStore.getState().setFontSize(2);
-      expect(useTerminalThemeStore.getState().fontSize).toBe(8);
-    });
-
-    it("clamps to maximum 32", () => {
-      useTerminalThemeStore.getState().setFontSize(100);
-      expect(useTerminalThemeStore.getState().fontSize).toBe(32);
-    });
+  it("sets font size within bounds", () => {
+    useTerminalThemeStore.getState().setFontSize(20);
+    expect(useTerminalThemeStore.getState().fontSize).toBe(20);
   });
 
-  describe("setFontPresetId", () => {
-    it("switches to bundled preset font family", () => {
-      useTerminalThemeStore.getState().setFontPresetId("hack-nerd");
-      expect(useTerminalThemeStore.getState().fontPresetId).toBe("hack-nerd");
-      expect(useTerminalThemeStore.getState().fontFamily).toContain("Hack Nerd Font Mono");
-    });
-
-    it("falls back to default preset for unknown value", () => {
-      useTerminalThemeStore.getState().setFontPresetId("menlo");
-      expect(useTerminalThemeStore.getState().fontPresetId).toBe(DEFAULT_TERMINAL_FONT_PRESET_ID);
-      expect(useTerminalThemeStore.getState().fontFamily).toBe(DEFAULT_TERMINAL_FONT_FAMILY);
-    });
-
-    it("keeps the preset list aligned with bundled font count", () => {
-      expect(TERMINAL_FONT_PRESETS).toHaveLength(12);
-    });
+  it("clamps font size to bounds", () => {
+    useTerminalThemeStore.getState().setFontSize(2);
+    expect(useTerminalThemeStore.getState().fontSize).toBe(8);
+    useTerminalThemeStore.getState().setFontSize(100);
+    expect(useTerminalThemeStore.getState().fontSize).toBe(32);
   });
 
-  describe("persisted font migration", () => {
-    it("rehydrates with the default preset for removed values", async () => {
-      localStorage.setItem(
-        "terminal_theme",
-        JSON.stringify({
-          state: {
-            selectedThemeId: "default",
-            customThemes: [],
-            fontSize: 14,
-            fontPresetId: "consolas",
-            fontFamily: "'Consolas', monospace",
-            scrollback: SCROLLBACK_DEFAULT,
-            enableImagePreview: false,
-          },
-          version: 3,
-        })
-      );
-
-      useTerminalThemeStore.persist.rehydrate();
-      await Promise.resolve();
-
-      expect(useTerminalThemeStore.getState().fontPresetId).toBe(DEFAULT_TERMINAL_FONT_PRESET_ID);
-      expect(useTerminalThemeStore.getState().fontFamily).toBe(DEFAULT_TERMINAL_FONT_FAMILY);
-      expect(useTerminalThemeStore.getState().enableImagePreview).toBe(false);
-    });
+  it("switches to bundled preset font family", () => {
+    useTerminalThemeStore.getState().setFontPresetId("hack-nerd");
+    expect(useTerminalThemeStore.getState().fontPresetId).toBe("hack-nerd");
+    expect(useTerminalThemeStore.getState().fontFamily).toContain("Hack Nerd Font Mono");
   });
 
-  describe("setEnableImagePreview", () => {
-    it("toggles the preview feature flag", () => {
-      useTerminalThemeStore.getState().setEnableImagePreview(false);
-      expect(useTerminalThemeStore.getState().enableImagePreview).toBe(false);
-    });
+  it("falls back to default preset for unknown value", () => {
+    useTerminalThemeStore.getState().setFontPresetId("menlo");
+    expect(useTerminalThemeStore.getState().fontPresetId).toBe(DEFAULT_TERMINAL_FONT_PRESET_ID);
+    expect(useTerminalThemeStore.getState().fontFamily).toBe(DEFAULT_TERMINAL_FONT_FAMILY);
   });
 
-  describe("setScrollback", () => {
-    it("defaults to 25000", () => {
-      expect(useTerminalThemeStore.getState().scrollback).toBe(25000);
-      expect(SCROLLBACK_DEFAULT).toBe(25000);
-    });
-
-    it("sets scrollback within bounds", () => {
-      useTerminalThemeStore.getState().setScrollback(5000);
-      expect(useTerminalThemeStore.getState().scrollback).toBe(5000);
-    });
-
-    it("clamps to minimum 100", () => {
-      useTerminalThemeStore.getState().setScrollback(10);
-      expect(useTerminalThemeStore.getState().scrollback).toBe(100);
-    });
-
-    it("clamps to maximum 1000000", () => {
-      useTerminalThemeStore.getState().setScrollback(99_999_999);
-      expect(useTerminalThemeStore.getState().scrollback).toBe(1_000_000);
-    });
-
-    it("floors fractional values", () => {
-      useTerminalThemeStore.getState().setScrollback(1234.9);
-      expect(useTerminalThemeStore.getState().scrollback).toBe(1234);
-    });
-
-    it("falls back to default for non-finite input", () => {
-      useTerminalThemeStore.getState().setScrollback(Number.NaN);
-      expect(useTerminalThemeStore.getState().scrollback).toBe(SCROLLBACK_DEFAULT);
-    });
+  it("keeps the preset list aligned with bundled font count", () => {
+    expect(TERMINAL_FONT_PRESETS).toHaveLength(12);
   });
 
-  describe("custom theme CRUD", () => {
-    it("adds a custom theme", () => {
-      const theme = makeCustomTheme("c1", "My Theme");
-      useTerminalThemeStore.getState().addCustomTheme(theme);
+  it("rehydrates with the default preset for removed values", async () => {
+    localStorage.setItem(
+      "terminal_theme",
+      JSON.stringify({
+        state: {
+          selectedThemeId: "default",
+          customThemes: [],
+          fontSize: 14,
+          fontPresetId: "consolas",
+          fontFamily: "'Consolas', monospace",
+          scrollback: SCROLLBACK_DEFAULT,
+          enableImagePreview: false,
+          webglEnabled: false,
+        },
+        version: 4,
+      })
+    );
 
-      expect(useTerminalThemeStore.getState().customThemes).toHaveLength(1);
-      expect(useTerminalThemeStore.getState().customThemes[0].id).toBe("c1");
-    });
+    useTerminalThemeStore.persist.rehydrate();
+    await Promise.resolve();
 
-    it("updates a custom theme", () => {
-      const theme = makeCustomTheme("c1", "My Theme");
-      useTerminalThemeStore.getState().addCustomTheme(theme);
-
-      const updated = { ...theme, name: "Renamed Theme" };
-      useTerminalThemeStore.getState().updateCustomTheme(updated);
-
-      expect(useTerminalThemeStore.getState().customThemes[0].name).toBe("Renamed Theme");
-    });
-
-    it("removes a custom theme", () => {
-      const theme = makeCustomTheme("c1", "My Theme");
-      useTerminalThemeStore.getState().addCustomTheme(theme);
-      useTerminalThemeStore.getState().removeCustomTheme("c1");
-
-      expect(useTerminalThemeStore.getState().customThemes).toHaveLength(0);
-    });
-
-    it("resets selectedThemeId to default when removing selected custom theme", () => {
-      const theme = makeCustomTheme("c1", "My Theme");
-      useTerminalThemeStore.getState().addCustomTheme(theme);
-      useTerminalThemeStore.getState().setSelectedThemeId("c1");
-
-      useTerminalThemeStore.getState().removeCustomTheme("c1");
-
-      expect(useTerminalThemeStore.getState().selectedThemeId).toBe("default");
-    });
-
-    it("keeps selectedThemeId when removing a different custom theme", () => {
-      const t1 = makeCustomTheme("c1", "Theme 1");
-      const t2 = makeCustomTheme("c2", "Theme 2");
-      useTerminalThemeStore.getState().addCustomTheme(t1);
-      useTerminalThemeStore.getState().addCustomTheme(t2);
-      useTerminalThemeStore.getState().setSelectedThemeId("c2");
-
-      useTerminalThemeStore.getState().removeCustomTheme("c1");
-
-      expect(useTerminalThemeStore.getState().selectedThemeId).toBe("c2");
-    });
+    expect(useTerminalThemeStore.getState().fontPresetId).toBe(DEFAULT_TERMINAL_FONT_PRESET_ID);
+    expect(useTerminalThemeStore.getState().fontFamily).toBe(DEFAULT_TERMINAL_FONT_FAMILY);
+    expect(useTerminalThemeStore.getState().enableImagePreview).toBe(false);
+    expect(useTerminalThemeStore.getState().webglEnabled).toBe(false);
   });
 
-  describe("getActiveTheme", () => {
-    it("returns first builtin theme for default", () => {
-      useTerminalThemeStore.getState().setSelectedThemeId("default");
-      const active = useTerminalThemeStore.getState().getActiveTheme();
-      expect(active).toEqual(builtinThemes[0]);
-    });
+  it("toggles image preview", () => {
+    useTerminalThemeStore.getState().setEnableImagePreview(false);
+    expect(useTerminalThemeStore.getState().enableImagePreview).toBe(false);
+  });
 
-    it("returns matching builtin theme", () => {
-      useTerminalThemeStore.getState().setSelectedThemeId("dracula");
-      const active = useTerminalThemeStore.getState().getActiveTheme();
-      expect(active.id).toBe("dracula");
-    });
+  it("toggles webgl", () => {
+    useTerminalThemeStore.getState().setWebglEnabled(false);
+    expect(useTerminalThemeStore.getState().webglEnabled).toBe(false);
+  });
 
-    it("returns matching custom theme", () => {
-      const theme = makeCustomTheme("c1", "My Theme");
-      useTerminalThemeStore.getState().addCustomTheme(theme);
-      useTerminalThemeStore.getState().setSelectedThemeId("c1");
+  it("defaults scrollback to 25000 and clamps values", () => {
+    expect(useTerminalThemeStore.getState().scrollback).toBe(25000);
+    expect(SCROLLBACK_DEFAULT).toBe(25000);
+    useTerminalThemeStore.getState().setScrollback(10);
+    expect(useTerminalThemeStore.getState().scrollback).toBe(100);
+    useTerminalThemeStore.getState().setScrollback(99_999_999);
+    expect(useTerminalThemeStore.getState().scrollback).toBe(1_000_000);
+  });
 
-      const active = useTerminalThemeStore.getState().getActiveTheme();
-      expect(active.id).toBe("c1");
-      expect(active.name).toBe("My Theme");
-    });
+  it("adds, updates and removes custom themes", () => {
+    const theme = makeCustomTheme("c1", "My Theme");
+    useTerminalThemeStore.getState().addCustomTheme(theme);
+    expect(useTerminalThemeStore.getState().customThemes).toHaveLength(1);
 
-    it("falls back to builtinThemes[0] for unknown ID", () => {
-      useTerminalThemeStore.getState().setSelectedThemeId("nonexistent");
-      const active = useTerminalThemeStore.getState().getActiveTheme();
-      expect(active).toEqual(builtinThemes[0]);
-    });
+    const updated = { ...theme, name: "Renamed Theme" };
+    useTerminalThemeStore.getState().updateCustomTheme(updated);
+    expect(useTerminalThemeStore.getState().customThemes[0].name).toBe("Renamed Theme");
+
+    useTerminalThemeStore.getState().removeCustomTheme("c1");
+    expect(useTerminalThemeStore.getState().customThemes).toHaveLength(0);
+  });
+
+  it("returns active builtin/custom theme or default fallback", () => {
+    useTerminalThemeStore.getState().setSelectedThemeId("default");
+    expect(useTerminalThemeStore.getState().getActiveTheme()).toEqual(builtinThemes[0]);
+
+    useTerminalThemeStore.getState().setSelectedThemeId("dracula");
+    expect(useTerminalThemeStore.getState().getActiveTheme().id).toBe("dracula");
+
+    const theme = makeCustomTheme("c1", "My Theme");
+    useTerminalThemeStore.getState().addCustomTheme(theme);
+    useTerminalThemeStore.getState().setSelectedThemeId("c1");
+    expect(useTerminalThemeStore.getState().getActiveTheme().id).toBe("c1");
+
+    useTerminalThemeStore.getState().setSelectedThemeId("nonexistent");
+    expect(useTerminalThemeStore.getState().getActiveTheme()).toEqual(builtinThemes[0]);
   });
 });

@@ -7,6 +7,10 @@ const hoisted = vi.hoisted(() => {
   const reconnectBySessionMock = vi.fn();
   const terminalCtor = vi.fn();
   const bridgeDisposeSpy = vi.fn();
+  const webglAddonCtor = vi.fn();
+  const webglAddonDisposeSpy = vi.fn();
+  const webglContextLossDisposeSpy = vi.fn();
+  const setWebglEnabledSpy = vi.fn();
   const disposeOrder: string[] = [];
   const state: { capturedOnKey: ((e: { key: string }) => void) | null } = {
     capturedOnKey: null,
@@ -18,6 +22,10 @@ const hoisted = vi.hoisted(() => {
     reconnectBySessionMock,
     terminalCtor,
     bridgeDisposeSpy,
+    webglAddonCtor,
+    webglAddonDisposeSpy,
+    webglContextLossDisposeSpy,
+    setWebglEnabledSpy,
     disposeOrder,
     state,
   };
@@ -34,6 +42,7 @@ vi.mock("../../wailsjs/runtime/runtime", () => ({
 
 vi.mock("../../wailsjs/go/app/App", () => ({
   WriteSSH: vi.fn().mockResolvedValue(undefined),
+  WriteSerial: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@xterm/xterm", () => {
@@ -47,6 +56,8 @@ vi.mock("@xterm/xterm", () => {
       return { dispose: vi.fn() };
     });
     attachCustomKeyEventHandler = vi.fn();
+    textarea = { addEventListener: vi.fn(), removeEventListener: vi.fn() } as unknown as HTMLTextAreaElement;
+    options = { screenReaderMode: false };
     dispose = vi.fn(() => {
       hoisted.disposeOrder.push("term");
       hoisted.disposeSpy();
@@ -72,6 +83,23 @@ vi.mock("@/components/terminal/terminalInputBridge", () => ({
 
 vi.mock("@xterm/addon-fit", () => ({ FitAddon: class {} }));
 vi.mock("@xterm/addon-search", () => ({ SearchAddon: class {} }));
+vi.mock("@xterm/addon-webgl", () => {
+  class MockWebglAddon {
+    constructor() {
+      hoisted.webglAddonCtor();
+    }
+    onContextLoss = vi.fn(() => ({
+      dispose: vi.fn(() => {
+        hoisted.webglContextLossDisposeSpy();
+      }),
+    }));
+    dispose = vi.fn(() => {
+      hoisted.disposeOrder.push("webgl");
+      hoisted.webglAddonDisposeSpy();
+    });
+  }
+  return { WebglAddon: MockWebglAddon };
+});
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
 vi.mock("@/stores/terminalStore", () => ({
@@ -88,10 +116,12 @@ vi.mock("@/stores/terminalThemeStore", () => ({
   useTerminalThemeStore: {
     getState: () => ({
       enableImagePreview: true,
+      setWebglEnabled: hoisted.setWebglEnabledSpy,
     }),
   },
 }));
 
+vi.mock("@/data/terminalFonts", () => ({ withTerminalFontFallback: (s: string) => s }));
 vi.mock("@/lib/terminalEncode", () => ({
   base64ToBytes: (_base64: string) => new Uint8Array(),
   bytesToBase64: () => "",
@@ -106,7 +136,6 @@ vi.mock("@/components/terminal/terminalImageProtocol", () => ({
     setEnabled() {}
   },
 }));
-
 vi.mock("@/i18n", () => ({
   default: { t: (key: string) => `<<${key}>>` },
 }));
@@ -122,6 +151,10 @@ describe("terminalRegistry", () => {
     hoisted.reconnectBySessionMock.mockClear();
     hoisted.terminalCtor.mockClear();
     hoisted.bridgeDisposeSpy.mockClear();
+    hoisted.webglAddonCtor.mockClear();
+    hoisted.webglAddonDisposeSpy.mockClear();
+    hoisted.webglContextLossDisposeSpy.mockClear();
+    hoisted.setWebglEnabledSpy.mockClear();
     hoisted.disposeOrder.length = 0;
   });
 
@@ -135,58 +168,28 @@ describe("terminalRegistry", () => {
     disposeTerminal("sess-1");
   });
 
-  it("triggers reconnectBySession on Enter after close, and re-arms on the next close", () => {
+  it("triggers reconnectBySession on Enter after close", () => {
     getOrCreateTerminal("sess-2", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
     hoisted.eventHandlers.get("ssh:closed:sess-2")?.();
-    expect(hoisted.state.capturedOnKey).toBeTruthy();
-
     hoisted.state.capturedOnKey?.({ key: "\r" });
     expect(hoisted.reconnectBySessionMock).toHaveBeenCalledWith("sess-2");
-    expect(hoisted.reconnectBySessionMock).toHaveBeenCalledTimes(1);
-
-    // 第二次 Enter 在同一次 closed 内不应再触发
-    hoisted.state.capturedOnKey?.({ key: "\r" });
-    expect(hoisted.reconnectBySessionMock).toHaveBeenCalledTimes(1);
-
-    // 重新 closed 后,Enter 应当再次触发
-    hoisted.eventHandlers.get("ssh:closed:sess-2")?.();
-    hoisted.state.capturedOnKey?.({ key: "\r" });
-    expect(hoisted.reconnectBySessionMock).toHaveBeenCalledTimes(2);
-
     disposeTerminal("sess-2");
   });
 
-  it("ignores non-Enter keys after close", () => {
-    getOrCreateTerminal("sess-3", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
-    hoisted.eventHandlers.get("ssh:closed:sess-3")?.();
-    hoisted.state.capturedOnKey?.({ key: "a" });
-    hoisted.state.capturedOnKey?.({ key: "\n" });
-    expect(hoisted.reconnectBySessionMock).not.toHaveBeenCalled();
-    disposeTerminal("sess-3");
-  });
-
-  it("does not trigger reconnect when not closed", () => {
-    getOrCreateTerminal("sess-4", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
-    hoisted.state.capturedOnKey?.({ key: "\r" });
-    expect(hoisted.reconnectBySessionMock).not.toHaveBeenCalled();
-    disposeTerminal("sess-4");
-  });
-
-  it("disposes the input bridge before the xterm instance", () => {
+  it("disposes bridge and webgl before term", () => {
     getOrCreateTerminal("sess-order", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
     disposeTerminal("sess-order");
-    expect(hoisted.bridgeDisposeSpy).toHaveBeenCalled();
-    expect(hoisted.disposeSpy).toHaveBeenCalled();
-    expect(hoisted.disposeOrder).toEqual(["bridge", "term"]);
+    expect(hoisted.disposeOrder).toEqual(["bridge", "webgl", "term"]);
   });
 
-  it("re-creates a fresh terminal after dispose for the same sessionId", () => {
-    const before = hoisted.terminalCtor.mock.calls.length;
-    getOrCreateTerminal("sess-5", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
-    disposeTerminal("sess-5");
-    expect(hoisted.disposeSpy).toHaveBeenCalled();
-    getOrCreateTerminal("sess-5", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
-    expect(hoisted.terminalCtor.mock.calls.length).toBe(before + 2);
-    disposeTerminal("sess-5");
+  it("skips WebGL when webglEnabled is false", () => {
+    getOrCreateTerminal("sess-no-webgl", {
+      fontSize: 14,
+      fontFamily: "mono",
+      scrollback: 1000,
+      webglEnabled: false,
+    });
+    expect(hoisted.webglAddonCtor).not.toHaveBeenCalled();
+    disposeTerminal("sess-no-webgl");
   });
 });

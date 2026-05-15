@@ -2,16 +2,20 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/opskat/opskat/internal/ai"
 	"github.com/opskat/opskat/internal/approval"
 	_ "github.com/opskat/opskat/internal/assettype"
 	"github.com/opskat/opskat/internal/bootstrap"
+	"github.com/opskat/opskat/internal/connpool"
 	"github.com/opskat/opskat/internal/model/entity/asset_entity"
 	"github.com/opskat/opskat/internal/repository/asset_repo"
 	"github.com/opskat/opskat/internal/repository/extension_data_repo"
@@ -20,6 +24,7 @@ import (
 	"github.com/opskat/opskat/internal/service/extension_svc"
 	"github.com/opskat/opskat/internal/service/kafka_svc"
 	"github.com/opskat/opskat/internal/service/redis_svc"
+	"github.com/opskat/opskat/internal/service/serial_svc"
 	"github.com/opskat/opskat/internal/service/sftp_svc"
 	"github.com/opskat/opskat/internal/service/snippet_svc"
 	"github.com/opskat/opskat/internal/service/ssh_svc"
@@ -28,9 +33,17 @@ import (
 
 	"github.com/cago-frame/cago/pkg/i18n"
 	"github.com/cago-frame/cago/pkg/logger"
+	"github.com/redis/go-redis/v9"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
+)
+
+// panelConnIdleTTL 控制 query 面板连接缓存的空闲驱逐阈值。
+// 5 分钟与 sshpool.Pool 的 idle timeout 对齐;evictor 30s 扫一次。
+const (
+	panelConnIdleTTL       = 5 * time.Minute
+	panelConnEvictInterval = 30 * time.Second
 )
 
 // SkillContent 内嵌的 skill/plugin 文件内容（由 main.go 通过 go:embed 注入）
@@ -78,6 +91,7 @@ type App struct {
 	sshProxyServer          *sshpool.Server            // SSH 连接池 Unix socket 服务
 	redisService            *redis_svc.Service         // Redis 浏览/编辑服务
 	kafkaService            *kafka_svc.Service         // Kafka 管理服务
+	serialManager           *serial_svc.Manager        // 串口连接管理器
 	shutdownCh              chan struct{}              // 关闭信号，cleanup 时 close 以解除所有阻塞等待
 	pendingAuthResponses    sync.Map                   // map[string]chan []string（keyboard-interactive 认证响应用）
 	pendingHostKeyResponses sync.Map                   // map[string]chan ssh_svc.HostKeyAction（主机密钥校验响应用）
@@ -90,6 +104,13 @@ type App struct {
 	flushAckCh              chan struct{} // OnBeforeClose 等待前端确认 flush 完成
 	k8sLogStreams           sync.Map      // map[string]context.CancelFunc — pod log stream cancellations
 	k8sLogStreamCounter     int64         // pod log stream ID counter
+
+	// query 面板的持久连接缓存(按 assetID:database 维度复用 *sql.DB / *redis.Client / *mongo 客户端)
+	dbPanelCache       *panelConnCache[*sql.DB]
+	redisPanelCache    *panelConnCache[*redis.Client]
+	mongoPanelCache    *panelConnCache[*connpool.MongoClientCloser]
+	panelCacheEvictCtx context.Context
+	panelCacheEvictCxl context.CancelFunc
 }
 
 // NewApp 创建App实例
@@ -100,6 +121,7 @@ func NewApp(skill SkillContent) *App {
 		skillContent:   skill,
 		sshManager:     mgr,
 		sftpService:    sftp_svc.NewService(mgr),
+		serialManager:  serial_svc.NewManager(),
 		permissionChan: make(chan ai.PermissionResponse, 1),
 		shutdownCh:     make(chan struct{}),
 		flushAckCh:     make(chan struct{}, 1),
@@ -123,6 +145,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.startSSHPoolServer(authToken)
 	a.redisService = redis_svc.New(a.sshPool)
 	a.kafkaService = kafka_svc.New(a.sshPool)
+	a.initPanelConnCaches(ctx)
 	a.startAutoUpdateCheck()
 	a.InitAIProvider()
 	a.subscribeAIFlushAck()
@@ -191,6 +214,10 @@ func (a *App) Cleanup() {
 	// 先发送关闭信号，解除所有阻塞等待（审批、权限确认等），避免 wg.Wait 死锁
 	close(a.shutdownCh)
 
+	if a.serialManager != nil {
+		a.serialManager.CloseAll()
+	}
+
 	if a.kafkaService != nil {
 		a.kafkaService.Close()
 		a.kafkaService = nil
@@ -198,6 +225,7 @@ func (a *App) Cleanup() {
 	if a.sshProxyServer != nil {
 		a.sshProxyServer.Stop()
 	}
+	a.closePanelConnCaches()
 	if a.sshPool != nil {
 		a.sshPool.Close()
 	}
@@ -206,6 +234,35 @@ func (a *App) Cleanup() {
 	}
 	if a.extSvc != nil {
 		a.extSvc.Close(context.Background())
+	}
+}
+
+// initPanelConnCaches 初始化 query 面板的三个连接缓存,并启动各自的空闲驱逐协程。
+// 必须在 sshPool 创建之后调用(panel 缓存的 dial 回调通过 sshPool 走 SSH 隧道)。
+func (a *App) initPanelConnCaches(ctx context.Context) {
+	a.dbPanelCache = newPanelConnCache[*sql.DB]("database", panelConnIdleTTL)
+	a.redisPanelCache = newPanelConnCache[*redis.Client]("redis", panelConnIdleTTL)
+	a.mongoPanelCache = newPanelConnCache[*connpool.MongoClientCloser]("mongodb", panelConnIdleTTL)
+	a.panelCacheEvictCtx, a.panelCacheEvictCxl = context.WithCancel(ctx)
+	go a.dbPanelCache.startEvictor(a.panelCacheEvictCtx, panelConnEvictInterval)
+	go a.redisPanelCache.startEvictor(a.panelCacheEvictCtx, panelConnEvictInterval)
+	go a.mongoPanelCache.startEvictor(a.panelCacheEvictCtx, panelConnEvictInterval)
+}
+
+// closePanelConnCaches 关闭 evictor 并释放所有缓存连接。Cleanup 调用,顺序在
+// sshPool.Close 之前以便先把上层应用连接清掉,再回收底层 SSH 传输。
+func (a *App) closePanelConnCaches() {
+	if a.panelCacheEvictCxl != nil {
+		a.panelCacheEvictCxl()
+	}
+	if a.dbPanelCache != nil {
+		_ = a.dbPanelCache.Close()
+	}
+	if a.redisPanelCache != nil {
+		_ = a.redisPanelCache.Close()
+	}
+	if a.mongoPanelCache != nil {
+		_ = a.mongoPanelCache.Close()
 	}
 }
 
@@ -224,6 +281,15 @@ func (a *App) langCtx() context.Context {
 	ctx := i18n.WithLanguage(a.ctx, a.lang)
 	ctx = ai.WithPolicyLang(ctx, a.lang)
 	return ctx
+}
+
+// pickMsg 按当前 App 语言挑选中英文消息。给那些不在 cago i18n 注册表里、
+// 但又会展示给用户的小段文案使用（连接进度、绑定层错误等）。
+func (a *App) pickMsg(zh, en string) string {
+	if strings.HasPrefix(strings.ToLower(a.lang), "zh") {
+		return zh
+	}
+	return en
 }
 
 // activateWindow 激活应用窗口到前台（审批弹窗时调用）
