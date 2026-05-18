@@ -6,29 +6,7 @@ import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { base64ToBytes } from "@/lib/terminalEncode";
 import { K8sSectionCard } from "./K8sSectionCard";
 import { K8sLogTerminal, type K8sLogTerminalHandle } from "./K8sLogTerminal";
-
-const MAX_LOG_CHUNKS = 2000;
-
-export interface LogBufferState {
-  container: string;
-  tailLines: number;
-  chunks: string[];
-}
-
-export interface LogTabState {
-  logStreamID: string | null;
-  logContainer: string;
-  logTailLines: number;
-  logError: string | null;
-  currentPod?: string;
-  logBuffers?: Record<string, LogBufferState>;
-}
-
-export type LogTabStateUpdate = Partial<LogTabState> | ((prev: LogTabState) => LogTabState);
-
-export function buildLogBufferKey(podName: string, container: string, tailLines: number) {
-  return `${podName}::${container}::${tailLines}`;
-}
+import { buildLogBufferKey, MAX_LOG_CHUNKS, type LogTabState, type LogTabStateUpdate } from "./k8sLogState";
 
 interface K8sLogsPanelProps {
   assetId: number;
@@ -56,9 +34,12 @@ export function K8sLogsPanel({
   const myStreamIDRef = useRef<string | null>(null);
   const eventNamesRef = useRef<{ data: string; err: string; end: string } | null>(null);
   const onStateChangeRef = useRef(onStateChange);
+  const logBuffersRef = useRef(state.logBuffers);
   const activeContainer = state.logContainer || containers[0]?.name || "";
   // eslint-disable-next-line react-hooks/refs
   onStateChangeRef.current = onStateChange;
+  // eslint-disable-next-line react-hooks/refs
+  logBuffersRef.current = state.logBuffers;
 
   const offEvents = useCallback(() => {
     const names = eventNamesRef.current;
@@ -162,7 +143,7 @@ export function K8sLogsPanel({
     }
     terminalRef.current?.clear();
     const bufferKey = buildLogBufferKey(podName, activeContainer, state.logTailLines);
-    const chunks = state.logBuffers?.[bufferKey]?.chunks || [];
+    const chunks = logBuffersRef.current?.[bufferKey]?.chunks || [];
     for (const chunk of chunks) {
       terminalRef.current?.write(base64ToBytes(chunk));
     }

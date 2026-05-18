@@ -13,6 +13,7 @@ import { withTerminalFontFallback } from "@/data/terminalFonts";
 import i18n from "@/i18n";
 import { createTerminalInputBridge, type TerminalInputBridge } from "./terminalInputBridge";
 import { TerminalImageController } from "./terminalImageProtocol";
+import { attachXtermRolloverGuard } from "./xtermRolloverGuard";
 
 export interface TerminalInstance {
   term: XTerminal;
@@ -97,27 +98,7 @@ export function getOrCreateTerminal(
     writeFn(sessionId, bytesToBase64(new TextEncoder().encode(data))).catch(console.error);
 
   const onDataDispose = term.onData(writeData);
-
-  let detachRolloverPatch: () => void = () => {};
-  const ta = term.textarea;
-  if (ta) {
-    const coreRef = (term as unknown as { _core?: { _keyDownSeen?: boolean } })._core;
-    const rolloverHandler = (e: Event) => {
-      const ie = e as InputEvent;
-      if (
-        ie.inputType === "insertText" &&
-        ie.data &&
-        !ie.isComposing &&
-        ie.composed &&
-        coreRef?._keyDownSeen === true &&
-        !term.options.screenReaderMode
-      ) {
-        writeData(ie.data);
-      }
-    };
-    ta.addEventListener("input", rolloverHandler, true);
-    detachRolloverPatch = () => ta.removeEventListener("input", rolloverHandler, true);
-  }
+  const rolloverGuard = attachXtermRolloverGuard(term, writeData);
 
   const dataEvent = `${eventPrefix}:data:${sessionId}`;
   EventsOn(dataEvent, (dataB64: string) => {
@@ -137,7 +118,7 @@ export function getOrCreateTerminal(
     isClosed: false,
     dispose: () => {
       bridge.dispose();
-      detachRolloverPatch();
+      rolloverGuard.dispose();
       onDataDispose.dispose();
       onKeyDispose.dispose();
       EventsOff(dataEvent);

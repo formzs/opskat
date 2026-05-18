@@ -847,6 +847,23 @@ func claudePluginDir(home string) string {
 	return filepath.Join(home, ".claude", "plugins", "marketplaces", pluginRegistryName, pluginName)
 }
 
+// pathTraversesSymlink 检测 path 自身或其任一祖先是否为软链接。
+// 用于安装阶段：开发者会把 ~/.claude/plugins/marketplaces/opskat 软链到源码 plugin/，
+// 这时不应该把动态注入后的 SKILL.md 写回源码树。
+func pathTraversesSymlink(p string) bool {
+	p = filepath.Clean(p)
+	for {
+		if info, err := os.Lstat(p); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			return true
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return false
+		}
+		p = parent
+	}
+}
+
 // claudeMarketplaceDir 返回 Claude Code 市场目录
 func claudeMarketplaceDir(home string) string {
 	return filepath.Join(home, ".claude", "plugins", "marketplaces", pluginRegistryName)
@@ -880,6 +897,10 @@ func (a *App) skillMDWithDataDir() string {
 // installPluginTo 将 Skill 以插件格式安装到 Claude Code
 // pluginDir 是 marketplace 内的插件根目录（marketplaces/opskat/opsctl/）
 func (a *App) installPluginTo(pluginDir, home string) error {
+	if pathTraversesSymlink(pluginDir) {
+		logger.Default().Info("skip Claude plugin install: target traverses symlink (dev mode)", zap.String("path", pluginDir))
+		return nil
+	}
 	// 创建插件目录结构（插件和市场 manifest 都在 marketplace 目录树内）
 	mktDir := claudeMarketplaceDir(home)
 	dirs := []string{
@@ -981,7 +1002,10 @@ func (a *App) registerPlugin(home string) error {
 	kmFile := filepath.Join(pluginsDir, "known_marketplaces.json")
 	km := make(map[string]any)
 	if data, err := os.ReadFile(kmFile); err == nil { //nolint:gosec // path from app data dir
-		json.Unmarshal(data, &km) //nolint:errcheck,gosec // best-effort merge
+		if err := json.Unmarshal(data, &km); err != nil {
+			logger.Default().Warn("parse known_marketplaces.json failed, will overwrite", zap.Error(err))
+			km = make(map[string]any)
+		}
 	}
 	km[pluginRegistryName] = map[string]any{
 		"source":          map[string]any{"source": "directory", "path": mktPath},
@@ -996,7 +1020,10 @@ func (a *App) registerPlugin(home string) error {
 	settingsFile := filepath.Join(home, ".claude", "settings.json")
 	sc := make(map[string]any)
 	if data, err := os.ReadFile(settingsFile); err == nil { //nolint:gosec // path from app data dir
-		json.Unmarshal(data, &sc) //nolint:errcheck,gosec // best-effort merge
+		if err := json.Unmarshal(data, &sc); err != nil {
+			logger.Default().Warn("parse settings.json failed, will overwrite plugin settings", zap.Error(err))
+			sc = make(map[string]any)
+		}
 	}
 	ep, _ := sc["enabledPlugins"].(map[string]any)
 	if ep == nil {
@@ -1032,6 +1059,10 @@ func writeJSON(path string, v any) error {
 // installSkillTo 将 Skill 文件以普通格式安装到目标目录（Codex/OpenCode）
 // Codex/OpenCode 没有 commands/ 机制，init.md 作为 references 供自动加载
 func (a *App) installSkillTo(skillDir string) error {
+	if pathTraversesSymlink(skillDir) {
+		logger.Default().Info("skip skill install: target traverses symlink (dev mode)", zap.String("path", skillDir))
+		return nil
+	}
 	refsDir := filepath.Join(skillDir, "references")
 	if err := os.MkdirAll(refsDir, 0755); err != nil {
 		return fmt.Errorf("create directory failed: %w", err)
@@ -1054,6 +1085,10 @@ func (a *App) installSkillTo(skillDir string) error {
 // installGeminiExtension 将 Skill 以 Gemini CLI 扩展格式安装
 // extDir = ~/.gemini/extensions/opsctl/
 func (a *App) installGeminiExtension(extDir string) error {
+	if pathTraversesSymlink(extDir) {
+		logger.Default().Info("skip Gemini extension install: target traverses symlink (dev mode)", zap.String("path", extDir))
+		return nil
+	}
 	dirs := []string{
 		filepath.Join(extDir, "skills", "opsctl", "references"),
 	}

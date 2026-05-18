@@ -400,21 +400,14 @@ func formatDenyMessage(_ context.Context, assetName, command, reason string, hin
 
 // --- 策略收集 ---
 
-// resolveAssetPolicyChain 解析资产及其组链，返回按优先级排序的策略持有者列表（资产优先）
-func resolveAssetPolicyChain(ctx context.Context, assetID int64) (*asset_entity.Asset, []policy.Holder) {
+// resolveAssetForPolicy resolves the asset used as the root for policy checks.
+func resolveAssetForPolicy(ctx context.Context, assetID int64) *asset_entity.Asset {
 	asset, err := asset_svc.Asset().Get(ctx, assetID)
 	if err != nil {
 		logger.Default().Warn("get asset for policy check", zap.Int64("assetID", assetID), zap.Error(err))
-		return nil, nil
+		return nil
 	}
-	var holders []policy.Holder
-	holders = append(holders, asset)
-	if asset.GroupID > 0 {
-		for _, g := range resolveGroupChain(ctx, asset.GroupID) {
-			holders = append(holders, g)
-		}
-	}
-	return asset, holders
+	return asset
 }
 
 // collectPoliciesFromChain 从策略链中收集指定类型的策略
@@ -426,6 +419,19 @@ func collectPoliciesFromChain[T any](holders []policy.Holder, getter func(policy
 		}
 	}
 	return policies
+}
+
+func policyHoldersForAsset(ctx context.Context, asset *asset_entity.Asset) []policy.Holder {
+	if asset == nil {
+		return nil
+	}
+	holders := []policy.Holder{asset}
+	if asset.GroupID > 0 {
+		for _, g := range resolveGroupChain(ctx, asset.GroupID) {
+			holders = append(holders, g)
+		}
+	}
+	return holders
 }
 
 func collectPolicies(ctx context.Context, asset *asset_entity.Asset, groups []*group_entity.Group) []*asset_entity.CommandPolicy {
@@ -452,15 +458,7 @@ func collectPolicies(ctx context.Context, asset *asset_entity.Asset, groups []*g
 
 // collectQueryPolicies 收集资产 + 组链的 SQL 权限策略并合并
 func collectQueryPolicies(ctx context.Context, asset *asset_entity.Asset) *asset_entity.QueryPolicy {
-	var holders []policy.Holder
-	if asset != nil {
-		holders = append(holders, asset)
-		if asset.GroupID > 0 {
-			for _, g := range resolveGroupChain(ctx, asset.GroupID) {
-				holders = append(holders, g)
-			}
-		}
-	}
+	holders := policyHoldersForAsset(ctx, asset)
 	policies := collectPoliciesFromChain(holders, func(h policy.Holder) (*asset_entity.QueryPolicy, error) {
 		return h.GetQueryPolicy()
 	})
@@ -490,15 +488,7 @@ func collectQueryPolicies(ctx context.Context, asset *asset_entity.Asset) *asset
 
 // collectRedisPolicies 收集资产 + 组链的 Redis 权限策略并合并
 func collectRedisPolicies(ctx context.Context, asset *asset_entity.Asset) *asset_entity.RedisPolicy {
-	var holders []policy.Holder
-	if asset != nil {
-		holders = append(holders, asset)
-		if asset.GroupID > 0 {
-			for _, g := range resolveGroupChain(ctx, asset.GroupID) {
-				holders = append(holders, g)
-			}
-		}
-	}
+	holders := policyHoldersForAsset(ctx, asset)
 	policies := collectPoliciesFromChain(holders, func(h policy.Holder) (*asset_entity.RedisPolicy, error) {
 		return h.GetRedisPolicy()
 	})
@@ -526,15 +516,7 @@ func collectRedisPolicies(ctx context.Context, asset *asset_entity.Asset) *asset
 
 // collectMongoDBPolicies 收集资产 + 组链的 MongoDB 权限策略并合并
 func collectMongoDBPolicies(ctx context.Context, asset *asset_entity.Asset) *asset_entity.MongoPolicy {
-	var holders []policy.Holder
-	if asset != nil {
-		holders = append(holders, asset)
-		if asset.GroupID > 0 {
-			for _, g := range resolveGroupChain(ctx, asset.GroupID) {
-				holders = append(holders, g)
-			}
-		}
-	}
+	holders := policyHoldersForAsset(ctx, asset)
 	policies := collectPoliciesFromChain(holders, func(h policy.Holder) (*asset_entity.MongoPolicy, error) {
 		return h.GetMongoPolicy()
 	})
@@ -562,15 +544,7 @@ func collectMongoDBPolicies(ctx context.Context, asset *asset_entity.Asset) *ass
 
 // collectKafkaPolicies 收集资产 + 组链的 Kafka 权限策略并合并
 func collectKafkaPolicies(ctx context.Context, asset *asset_entity.Asset) *asset_entity.KafkaPolicy {
-	var holders []policy.Holder
-	if asset != nil {
-		holders = append(holders, asset)
-		if asset.GroupID > 0 {
-			for _, g := range resolveGroupChain(ctx, asset.GroupID) {
-				holders = append(holders, g)
-			}
-		}
-	}
+	holders := policyHoldersForAsset(ctx, asset)
 	policies := collectPoliciesFromChain(holders, func(h policy.Holder) (*asset_entity.KafkaPolicy, error) {
 		return h.GetKafkaPolicy()
 	})
@@ -598,15 +572,7 @@ func collectKafkaPolicies(ctx context.Context, asset *asset_entity.Asset) *asset
 
 // collectK8sPolicies 收集资产 + 组链的 K8s 权限策略并合并
 func collectK8sPolicies(ctx context.Context, asset *asset_entity.Asset) *asset_entity.K8sPolicy {
-	var holders []policy.Holder
-	if asset != nil {
-		holders = append(holders, asset)
-		if asset.GroupID > 0 {
-			for _, g := range resolveGroupChain(ctx, asset.GroupID) {
-				holders = append(holders, g)
-			}
-		}
-	}
+	holders := policyHoldersForAsset(ctx, asset)
 	policies := collectPoliciesFromChain(holders, func(h policy.Holder) (*asset_entity.K8sPolicy, error) {
 		return h.GetK8sPolicy()
 	})

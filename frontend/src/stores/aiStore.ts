@@ -17,7 +17,14 @@ import {
 import { ai, conversation_entity, app } from "../../wailsjs/go/models";
 import { EventsOn, EventsEmit } from "../../wailsjs/runtime/runtime";
 import i18n from "../i18n";
-import { useTabStore, registerTabCloseHook, registerTabRestoreHook, type AITabMeta, type Tab } from "./tabStore";
+import {
+  useTabStore,
+  registerTabCloseHook,
+  registerTabRestoreHook,
+  type AITabMeta,
+  type QueryTabMeta,
+  type Tab,
+} from "./tabStore";
 import { stripMentionTags } from "@/lib/mentionXml";
 import { classifyError, type ErrorKind } from "@/lib/aiError";
 
@@ -202,7 +209,7 @@ async function createConversationForEmptyHost(
 }
 
 function getDefaultSidebarTitle() {
-  return i18n.t("ai.newConversation", "新对话");
+  return i18n.t("ai.newConversation");
 }
 
 function createSidebarTabId() {
@@ -305,7 +312,7 @@ function loadInitialSidebarState() {
         migratedLegacy: false,
       };
     } catch {
-      // ignore invalid persisted data and fall back to legacy migration
+      // ignore invalid persisted data and fall back to sidebar state migration
     }
   }
 
@@ -319,7 +326,7 @@ function loadInitialSidebarState() {
     legacyLastBound !== null ||
     localStorage.getItem(LEGACY_SIDEBAR_INPUT_DRAFT_KEY) !== null;
 
-  // 从旧版单 sidebar key 平滑迁移到多 tab 模型：
+  // 从单 sidebar key 平滑迁移到多 tab 模型：
   // 只要检测到任意旧 key，就恢复成一个初始侧边 tab，避免升级后直接丢上下文。
   if (!hasLegacyState) {
     return {
@@ -1577,14 +1584,14 @@ async function _sendForConversation(convId: number, content: string) {
       (t): t is Tab & { meta: { assetId: number; assetName?: string } } =>
         t.type !== "ai" && t.type !== "page" && t.meta != null && "assetId" in t.meta
     )
-    .map(
-      (t) =>
-        new ai.TabInfo({
-          type: t.type,
-          assetId: t.meta.assetId || 0,
-          assetName: t.meta.assetName || t.label || "",
-        })
-    );
+    .map((t) => {
+      const type = t.type === "query" ? (t.meta as QueryTabMeta).assetType : t.type === "terminal" ? "ssh" : t.type;
+      return new ai.TabInfo({
+        type,
+        assetId: t.meta.assetId || 0,
+        assetName: t.meta.assetName || t.label || "",
+      });
+    });
 
   const aiContext = new ai.AIContext({ openTabs });
 
@@ -2061,7 +2068,7 @@ export const useAIStore = create<AIState>((set, get) => {
 
     openNewConversationTab: () => {
       const tabId = `ai-new-${Date.now()}`;
-      const title = i18n.t("ai.newConversation", "新对话");
+      const title = i18n.t("ai.newConversation");
 
       useTabStore.getState().openTab({
         id: tabId,
