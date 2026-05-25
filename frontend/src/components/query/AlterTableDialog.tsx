@@ -13,7 +13,7 @@ import {
   Label,
   Switch,
 } from "@opskat/ui";
-import { ExecuteSQL } from "../../../wailsjs/go/app/App";
+import { ExecuteSQL } from "../../../wailsjs/go/query/Query";
 import { SqlPreviewDialog } from "./SqlPreviewDialog";
 import { toast } from "sonner";
 import { buildAlterStatements, quoteIdent, type AlterDraftColumn, type AlterLoadedColumn } from "@/lib/tableSql";

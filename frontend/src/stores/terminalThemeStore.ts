@@ -83,6 +83,15 @@ function normalizeFontPresetState(state: Partial<TerminalThemeState> | undefined
   };
 }
 
+export type WebglFailureCause = "init-threw" | "context-loss";
+
+export interface WebglFailure {
+  cause: WebglFailureCause;
+  name?: string;
+  message: string;
+  at: number;
+}
+
 interface TerminalThemeState {
   selectedThemeId: string;
   customThemes: TerminalTheme[];
@@ -92,6 +101,9 @@ interface TerminalThemeState {
   scrollback: number;
   enableImagePreview: boolean;
   webglEnabled: boolean;
+  // 最近一次 WebGL 自动关闭的原因。setWebglEnabled(true) 会把它清掉，所以只在
+  // GPU 加速被系统自动关掉后到下一次用户主动开启之间存在。
+  webglError: WebglFailure | null;
 
   setSelectedThemeId: (id: string) => void;
   setFontSize: (size: number) => void;
@@ -99,6 +111,7 @@ interface TerminalThemeState {
   setScrollback: (lines: number) => void;
   setEnableImagePreview: (enabled: boolean) => void;
   setWebglEnabled: (enabled: boolean) => void;
+  reportWebglFailure: (failure: WebglFailure) => void;
   addCustomTheme: (theme: TerminalTheme) => void;
   updateCustomTheme: (theme: TerminalTheme) => void;
   removeCustomTheme: (id: string) => void;
@@ -116,9 +129,11 @@ export const useTerminalThemeStore = create<TerminalThemeState>()(
       scrollback: SCROLLBACK_DEFAULT,
       enableImagePreview: true,
       webglEnabled: true,
+      webglError: null,
 
       setSelectedThemeId: (id) => set({ selectedThemeId: id }),
-      setWebglEnabled: (enabled) => set({ webglEnabled: enabled }),
+      setWebglEnabled: (enabled) => set(enabled ? { webglEnabled: true, webglError: null } : { webglEnabled: false }),
+      reportWebglFailure: (failure) => set({ webglError: failure }),
       setFontSize: (size) => set({ fontSize: Math.max(8, Math.min(32, size)) }),
       setFontPresetId: (presetId) => {
         const preset = resolveFontPreset(presetId);
@@ -167,6 +182,7 @@ export const useTerminalThemeStore = create<TerminalThemeState>()(
           ...currentState,
           webglEnabled: true,
           enableImagePreview: true,
+          webglError: null,
           ...normalizeFontPresetState((persistedState as Partial<TerminalThemeState> | undefined) || {}),
         };
       },

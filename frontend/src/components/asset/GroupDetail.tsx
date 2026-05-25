@@ -5,7 +5,7 @@ import { useAssetStore } from "@/stores/assetStore";
 import { CommandPolicyCard } from "@/components/asset/CommandPolicyCard";
 import { DetailGrid, DetailSection, InfoItem } from "@/components/asset/detail/InfoItem";
 import { group_entity } from "../../../wailsjs/go/models";
-import { UpdateGroup } from "../../../wailsjs/go/app/App";
+import { UpdateGroup } from "../../../wailsjs/go/system/System";
 import { toast } from "sonner";
 import { getIconComponent, getIconColor } from "@/components/asset/IconPicker";
 

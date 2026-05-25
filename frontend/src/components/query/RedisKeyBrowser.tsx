@@ -38,7 +38,7 @@ import {
   isDefaultRedisKeyFilter,
   makeLocalKeyMatcher,
 } from "@/lib/redisKeyTree";
-import { RedisDeleteKeys } from "../../../wailsjs/go/app/App";
+import { RedisDeleteKeys } from "../../../wailsjs/go/redis/Redis";
 import { RedisCreateKeyDialog } from "./RedisCreateKeyDialog";
 
 interface RedisKeyBrowserProps {

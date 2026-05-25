@@ -87,7 +87,7 @@ Frontend:
 ## Conventions
 
 - CI runs Go lint/tests and frontend lint/tests/build on PRs and pushes to `main`/`develop`.
-- Commit messages use gitmoji, e.g. `✨`, `🐛`, `♻️`, `🎨`, `⚡️`, `🔒`, `🔧`, `✅`, `📄`, `🚀`.
+- Commit messages use gitmoji, e.g. `✨`, `🐛`, `♻️`, `🎨`, `⚡️`, `🔒`, `🔧`, `✅`, `📄`, `🚀`. 关联 issue 时：subject line（第一行）末尾追加 `#<编号>`，body 里另起一行写 `closes #<编号>`（或 `fixes` / `resolves`）触发 GitHub 自动关闭。例如 subject `🐛 修复 xxx #126`，body 末尾 `closes #126`。
 - Go mocks live in `mock_*/` and are generated with `go.uber.org/mock`.
 - Go tests use goconvey and testify.
 - Service tests should mock transaction boundaries. When code uses `dbutil.WithTransaction`, prefer `dbutil.WithTransactionRunner` instead of opening in-memory SQLite.

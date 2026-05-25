@@ -5,7 +5,8 @@ import { createRef } from "react";
 import { AIChatInput, type AIChatInputHandle } from "@/components/ai/AIChatInput";
 import { useAssetStore } from "@/stores/assetStore";
 import type { Editor } from "@tiptap/react";
-import { ListSnippets, RecordSnippetUse } from "../../wailsjs/go/app/App";
+import { ListSnippets } from "../../wailsjs/go/extension/Extension";
+import { RecordSnippetUse } from "../../wailsjs/go/extension/Extension";
 
 function seed() {
   useAssetStore.setState({

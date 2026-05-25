@@ -28,8 +28,8 @@ import {
   DialogTitle,
   Separator,
 } from "@opskat/ui";
+import { ListInstalledExtensions } from "../../../wailsjs/go/extension/Extension";
 import {
-  ListInstalledExtensions,
   ReloadExtensions,
   InstallExtension,
   InstallExtensionFromDirectory,
@@ -37,7 +37,7 @@ import {
   EnableExtension,
   DisableExtension,
   GetExtensionDetail,
-} from "../../../wailsjs/go/app/App";
+} from "../../../wailsjs/go/extension/Extension";
 
 interface ExtInfo {
   name: string;

@@ -2,8 +2,8 @@ import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ShieldAlert, Terminal, Database, Server, Globe, FolderOpen, FileEdit, FilePlus, Usb } from "lucide-react";
 import { Button, Input, Textarea } from "@opskat/ui";
-import { RespondAIApproval } from "../../../wailsjs/go/app/App";
-import { ai } from "../../../wailsjs/go/models";
+import { RespondAIApproval } from "../../../wailsjs/go/ai/AI";
+import { permission } from "../../../wailsjs/go/models";
 import type { ContentBlock } from "@/stores/aiStore";
 
 interface ApprovalBlockProps {
@@ -38,13 +38,13 @@ export const ApprovalBlock = memo(function ApprovalBlock({ block }: ApprovalBloc
   const respond = (decision: string) => {
     if (!block.confirmId) return;
 
-    const resp = new ai.ApprovalResponse();
+    const resp = new permission.ApprovalResponse();
     resp.decision = decision;
 
     const carriesEdited = kind === "grant" || ((kind === "single" || kind === "local_tool") && decision === "allowAll");
     if (carriesEdited && decision !== "deny") {
       resp.edited_items = items.map((item, i) => {
-        const edited = new ai.ApprovalItem();
+        const edited = new permission.ApprovalItem();
         edited.type = item.type;
         edited.asset_id = item.asset_id;
         edited.asset_name = item.asset_name;

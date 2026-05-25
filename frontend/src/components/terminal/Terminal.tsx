@@ -2,11 +2,14 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState,
 import type { Terminal as XTerminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
-import { WriteSSH, WriteSerial, ResizeSSH, ResizeSerialTerminal } from "../../../wailsjs/go/app/App";
+import { WriteSSH } from "../../../wailsjs/go/ssh/SSH";
+import { WriteSerial, ResizeSerialTerminal } from "../../../wailsjs/go/serial/Serial";
+import { ResizeSSH } from "../../../wailsjs/go/ssh/SSH";
 import { useShortcutStore, formatBinding, formatModKey } from "@/stores/shortcutStore";
 import { useTerminalStore } from "@/stores/terminalStore";
 import { useTerminalThemeStore, toXtermTheme } from "@/stores/terminalThemeStore";
 import { builtinThemes, defaultLightTheme, defaultDarkTheme } from "@/data/terminalThemes";
+import { withTerminalFontFallback, withTerminalFontIsolation } from "@/data/terminalFonts";
 import { useResolvedTheme } from "@/components/theme-provider";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -41,7 +44,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const termRef = useRef<XTerminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
-  const activeRef = useRef(active);
   const [showSearch, setShowSearch] = useState(false);
   const [hasSelection, setHasSelection] = useState(false);
   const shortcuts = useShortcutStore((s) => s.shortcuts);
@@ -113,6 +115,11 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     requestAnimationFrame(() => {
       inst.fitAddon.fit();
       inst.imageController.requestRender();
+      const dims = inst.fitAddon.proposeDimensions();
+      if (dims && dims.cols > 0 && dims.rows > 0) {
+        const resizeFn = isSerial ? ResizeSerialTerminal : ResizeSSH;
+        resizeFn(sessionId, dims.cols, dims.rows).catch(console.error);
+      }
     });
 
     inst.bridge.setOnFilter(() => setShowSearch((v) => !v));
@@ -133,14 +140,12 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
 
     let resizeTimer = 0;
     const resizeObserver = new ResizeObserver(() => {
-      if (!activeRef.current) return;
       clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
-        if (!activeRef.current) return;
         inst.fitAddon.fit();
         inst.imageController.requestRender();
         const dims = inst.fitAddon.proposeDimensions();
-        if (dims) {
+        if (dims && dims.cols > 0 && dims.rows > 0) {
           const resizeFn = isSerial ? ResizeSerialTerminal : ResizeSSH;
           resizeFn(sessionId, dims.cols, dims.rows).catch(console.error);
         }
@@ -174,7 +179,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     if (!termRef.current || !inst) return;
     termRef.current.options.theme = xtermTheme;
     termRef.current.options.fontSize = fontSize;
-    termRef.current.options.fontFamily = fontFamily;
+    termRef.current.options.fontFamily = withTerminalFontIsolation(sessionId, withTerminalFontFallback(fontFamily));
     termRef.current.options.scrollback = scrollback;
     fitAddonRef.current?.fit();
     inst.imageController.requestRender();
@@ -190,10 +195,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     const inst = getTerminalInstance(sessionId);
     if (inst) inst.bridge.setShortcuts(shortcuts);
   }, [sessionId, shortcuts]);
-
-  useEffect(() => {
-    activeRef.current = active;
-  }, [active]);
 
   useEffect(() => {
     if (active) {

@@ -3,15 +3,15 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { RedisPanel } from "../components/query/RedisPanel";
 import { useQueryStore } from "../stores/queryStore";
 import { useTabStore } from "../stores/tabStore";
+import { ExecuteRedis } from "../../wailsjs/go/query/Query";
 import {
-  ExecuteRedis,
   RedisClientList,
   RedisCommandHistory,
   RedisGetKeyDetail,
   RedisListDatabases,
   RedisScanKeys,
   RedisSlowLog,
-} from "../../wailsjs/go/app/App";
+} from "../../wailsjs/go/redis/Redis";
 
 describe("RedisPanel", () => {
   const selectPanelKey = async (key: string) => {

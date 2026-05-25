@@ -17,8 +17,8 @@ import {
   SelectValue,
   Textarea,
 } from "@opskat/ui";
+import { RedisHashSet } from "../../../wailsjs/go/redis/Redis";
 import {
-  RedisHashSet,
   RedisListPush,
   RedisScanKeys,
   RedisSetAdd,
@@ -26,7 +26,7 @@ import {
   RedisSetStringValue,
   RedisStreamAdd,
   RedisZSetAdd,
-} from "../../../wailsjs/go/app/App";
+} from "../../../wailsjs/go/redis/Redis";
 
 type RedisCreateType = "string" | "hash" | "list" | "set" | "zset" | "stream";
 

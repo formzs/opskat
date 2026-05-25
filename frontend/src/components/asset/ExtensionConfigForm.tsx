@@ -14,7 +14,7 @@ import {
   Switch,
   Textarea,
 } from "@opskat/ui";
-import { CallExtensionAction } from "../../../wailsjs/go/app/App";
+import { CallExtensionAction } from "../../../wailsjs/go/extension/Extension";
 
 interface JSONSchemaProperty {
   type?: string;

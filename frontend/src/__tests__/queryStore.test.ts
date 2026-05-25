@@ -3,7 +3,8 @@ import { useTabStore } from "../stores/tabStore";
 import { useQueryStore } from "../stores/queryStore";
 import { useAssetStore } from "../stores/assetStore";
 import { asset_entity } from "../../wailsjs/go/models";
-import { RedisGetKeyDetail, RedisListDatabases, RedisScanKeys } from "../../wailsjs/go/app/App";
+import { RedisGetKeyDetail } from "../../wailsjs/go/redis/Redis";
+import { RedisListDatabases, RedisScanKeys } from "../../wailsjs/go/redis/Redis";
 
 function makeDatabaseAsset(id: number, name = `DB ${id}`): asset_entity.Asset {
   return {

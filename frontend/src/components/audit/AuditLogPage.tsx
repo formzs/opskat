@@ -21,7 +21,9 @@ import {
   TabsList,
   TabsTrigger,
 } from "@opskat/ui";
-import { ListAuditLogs, ListAuditSessions, GetSSHPoolConnections } from "../../../wailsjs/go/app/App";
+import { ListAuditLogs } from "../../../wailsjs/go/system/System";
+import { ListAuditSessions } from "../../../wailsjs/go/system/System";
+import { GetSSHPoolConnections } from "../../../wailsjs/go/ssh/SSH";
 import { audit_entity, audit_repo, sshpool } from "../../../wailsjs/go/models";
 
 const PAGE_SIZE = 20;

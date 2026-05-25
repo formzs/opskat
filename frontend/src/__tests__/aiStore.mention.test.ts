@@ -8,7 +8,8 @@ vi.mock("../i18n", () => ({
 import { useAIStore } from "@/stores/aiStore";
 import { useAssetStore } from "@/stores/assetStore";
 import { useTabStore } from "@/stores/tabStore";
-import { SendAIMessage, CreateConversation, QueueAIMessage } from "../../wailsjs/go/app/App";
+import { SendAIMessage } from "../../wailsjs/go/ai/AI";
+import { CreateConversation, QueueAIMessage } from "../../wailsjs/go/ai/AI";
 
 // mention 信息现在以内联 <mention> XML 形式写在 content 里，前端不再维护独立的
 // mentions 数组，也不再把 MentionedAssets 塞进 AIContext。这些 case 校验：

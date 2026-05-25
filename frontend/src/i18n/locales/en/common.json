@@ -1008,6 +1008,8 @@
     "imagePreviewHint": "Experimental support for Kitty unicode placeholders",
     "gpuAcceleration": "GPU Acceleration",
     "gpuAccelerationHint": "Use WebGL to render the terminal. Auto-disables on init failure.",
+    "gpuAccelerationErrorInitThrew": "WebGL renderer was auto-disabled because it failed to initialize.",
+    "gpuAccelerationErrorContextLoss": "WebGL renderer was auto-disabled because the GPU context was lost.",
     "default": "Default",
     "builtinThemes": "Built-in Themes",
     "customThemes": "Custom Themes",

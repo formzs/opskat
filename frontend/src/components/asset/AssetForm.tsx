@@ -23,21 +23,14 @@ import { IconPicker } from "@/components/asset/IconPicker";
 import { GroupSelect } from "@/components/asset/GroupSelect";
 import { useAssetStore } from "@/stores/assetStore";
 import { asset_entity, credential_entity } from "../../../wailsjs/go/models";
-import {
-  EncryptPassword,
-  GetAvailableAssetTypes,
-  GetDecryptedExtensionConfig,
-  ListCredentialsByType,
-  ListLocalSSHKeys,
-  TestSSHConnection,
-  TestDatabaseConnection,
-  TestRedisConnection,
-  TestMongoDBConnection,
-  TestKafkaConnection,
-  CancelTest,
-  TestSerialConnection,
-} from "../../../wailsjs/go/app/App";
-import { app } from "../../../wailsjs/go/models";
+import { EncryptPassword } from "../../../wailsjs/go/system/System";
+import { GetAvailableAssetTypes, GetDecryptedExtensionConfig } from "../../../wailsjs/go/extension/Extension";
+import { ListCredentialsByType, CancelTest } from "../../../wailsjs/go/system/System";
+import { ListLocalSSHKeys, TestSSHConnection } from "../../../wailsjs/go/ssh/SSH";
+import { TestDatabaseConnection, TestRedisConnection, TestMongoDBConnection } from "../../../wailsjs/go/query/Query";
+import { TestKafkaConnection } from "../../../wailsjs/go/kafka/Kafka";
+import { TestSerialConnection } from "../../../wailsjs/go/serial/Serial";
+import { ssh as ssh_models } from "../../../wailsjs/go/models";
 import { SSHConfigSection } from "@/components/asset/SSHConfigSection";
 import { DatabaseConfigSection } from "@/components/asset/DatabaseConfigSection";
 import { RedisConfigSection } from "@/components/asset/RedisConfigSection";
@@ -328,7 +321,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
   const [managedKeys, setManagedKeys] = useState<credential_entity.Credential[]>([]);
 
   // SSH fields - local key
-  const [localKeys, setLocalKeys] = useState<app.LocalSSHKeyInfo[]>([]);
+  const [localKeys, setLocalKeys] = useState<ssh_models.LocalSSHKeyInfo[]>([]);
   const [selectedKeyPaths, setSelectedKeyPaths] = useState<string[]>([]);
   const [privateKeyPassphrase, setPrivateKeyPassphrase] = useState("");
   const [encryptedPrivateKeyPassphrase, setEncryptedPrivateKeyPassphrase] = useState("");

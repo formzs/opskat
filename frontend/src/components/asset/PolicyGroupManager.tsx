@@ -4,13 +4,13 @@ import { Lock, Copy, Trash2, Plus, Save, ChevronDown, ChevronRight, Puzzle } fro
 import { Dialog, DialogContent, DialogHeader, DialogTitle, Button, Input, Separator, ConfirmDialog } from "@opskat/ui";
 import { PolicyTagEditor } from "@/components/asset/PolicyTagEditor";
 import { toast } from "sonner";
+import { ListPolicyGroups } from "../../../wailsjs/go/system/System";
 import {
-  ListPolicyGroups,
   CreatePolicyGroup,
   UpdatePolicyGroup,
   DeletePolicyGroup,
   CopyPolicyGroup,
-} from "../../../wailsjs/go/app/App";
+} from "../../../wailsjs/go/system/System";
 import { loadExtensionLocales } from "@/extension/i18n";
 import { policy_group_entity } from "../../../wailsjs/go/models";
 

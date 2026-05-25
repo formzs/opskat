@@ -14,7 +14,7 @@ import {
   ScrollArea,
   Switch,
 } from "@opskat/ui";
-import { ExecuteSQL } from "../../../wailsjs/go/app/App";
+import { ExecuteSQL } from "../../../wailsjs/go/query/Query";
 import { toast } from "sonner";
 import { SqlPreviewDialog } from "./SqlPreviewDialog";
 import { buildCreateTableSql } from "@/lib/tableSql";

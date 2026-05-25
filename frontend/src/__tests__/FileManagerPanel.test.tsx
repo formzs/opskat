@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { FileManagerPanel } from "../components/terminal/FileManagerPanel";
 import { useTerminalStore, type TerminalDirectorySyncState } from "../stores/terminalStore";
 import { useSFTPStore, type SFTPTransfer } from "../stores/sftpStore";
-import { ChangeSSHDirectory, SFTPListDir } from "../../wailsjs/go/app/App";
+import { ChangeSSHDirectory } from "../../wailsjs/go/ssh/SSH";
+import { SFTPListDir } from "../../wailsjs/go/ssh/SSH";
 
 const { toastError } = vi.hoisted(() => ({
   toastError: vi.fn(),

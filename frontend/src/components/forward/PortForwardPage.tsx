@@ -29,15 +29,15 @@ import {
   ConfirmDialog,
 } from "@opskat/ui";
 import { AssetSelect } from "@/components/asset/AssetSelect";
+import { ListForwardConfigs } from "../../../wailsjs/go/ssh/SSH";
 import {
-  ListForwardConfigs,
   CreateForwardConfig,
   UpdateForwardConfig,
   DeleteForwardConfig,
   StartForwardConfig,
   StopForwardConfig,
-} from "../../../wailsjs/go/app/App";
-import { app, forward_entity } from "../../../wailsjs/go/models";
+} from "../../../wailsjs/go/ssh/SSH";
+import { ssh as ssh_models, forward_entity } from "../../../wailsjs/go/models";
 
 // 编辑中的规则（无 id）
 interface EditRule {
@@ -58,7 +58,7 @@ const emptyRule = (): EditRule => ({
 
 export function PortForwardPage() {
   const { t } = useTranslation();
-  const [configs, setConfigs] = useState<app.ForwardConfigWithStatus[]>([]);
+  const [configs, setConfigs] = useState<ssh_models.ForwardConfigWithStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set());
 
@@ -108,7 +108,7 @@ export function PortForwardPage() {
     setDialogOpen(true);
   };
 
-  const openEdit = (cfg: app.ForwardConfigWithStatus) => {
+  const openEdit = (cfg: ssh_models.ForwardConfigWithStatus) => {
     setEditId(cfg.id);
     setEditName(cfg.name);
     setEditAssetId(cfg.assetId);
@@ -170,7 +170,7 @@ export function PortForwardPage() {
       await refresh();
     });
 
-  const handleAssetChange = (cfg: app.ForwardConfigWithStatus, assetId: number) =>
+  const handleAssetChange = (cfg: ssh_models.ForwardConfigWithStatus, assetId: number) =>
     withPending(cfg.id, async () => {
       const wasRunning = cfg.status !== "stopped";
       const rules = cfg.rules.map(

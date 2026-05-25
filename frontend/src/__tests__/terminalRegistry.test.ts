@@ -10,7 +10,9 @@ const hoisted = vi.hoisted(() => {
   const webglAddonCtor = vi.fn();
   const webglAddonDisposeSpy = vi.fn();
   const webglContextLossDisposeSpy = vi.fn();
+  const webglClearTextureAtlasSpy = vi.fn();
   const setWebglEnabledSpy = vi.fn();
+  const reportWebglFailureSpy = vi.fn();
   const disposeOrder: string[] = [];
   const state: { capturedOnKey: ((e: { key: string }) => void) | null } = {
     capturedOnKey: null,
@@ -25,7 +27,9 @@ const hoisted = vi.hoisted(() => {
     webglAddonCtor,
     webglAddonDisposeSpy,
     webglContextLossDisposeSpy,
+    webglClearTextureAtlasSpy,
     setWebglEnabledSpy,
+    reportWebglFailureSpy,
     disposeOrder,
     state,
   };
@@ -40,8 +44,11 @@ vi.mock("../../wailsjs/runtime/runtime", () => ({
   },
 }));
 
-vi.mock("../../wailsjs/go/app/App", () => ({
+vi.mock("../../wailsjs/go/ssh/SSH", () => ({
   WriteSSH: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../wailsjs/go/serial/Serial", () => ({
   WriteSerial: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -55,6 +62,8 @@ vi.mock("@xterm/xterm", () => {
       hoisted.state.capturedOnKey = handler;
       return { dispose: vi.fn() };
     });
+    onWriteParsed = vi.fn(() => ({ dispose: vi.fn() }));
+    onRender = vi.fn(() => ({ dispose: vi.fn() }));
     attachCustomKeyEventHandler = vi.fn();
     textarea = { addEventListener: vi.fn(), removeEventListener: vi.fn() } as unknown as HTMLTextAreaElement;
     options = { screenReaderMode: false };
@@ -93,6 +102,9 @@ vi.mock("@xterm/addon-webgl", () => {
         hoisted.webglContextLossDisposeSpy();
       }),
     }));
+    clearTextureAtlas = vi.fn(() => {
+      hoisted.webglClearTextureAtlasSpy();
+    });
     dispose = vi.fn(() => {
       hoisted.disposeOrder.push("webgl");
       hoisted.webglAddonDisposeSpy();
@@ -117,11 +129,15 @@ vi.mock("@/stores/terminalThemeStore", () => ({
     getState: () => ({
       enableImagePreview: true,
       setWebglEnabled: hoisted.setWebglEnabledSpy,
+      reportWebglFailure: hoisted.reportWebglFailureSpy,
     }),
   },
 }));
 
-vi.mock("@/data/terminalFonts", () => ({ withTerminalFontFallback: (s: string) => s }));
+vi.mock("@/data/terminalFonts", () => ({
+  withTerminalFontFallback: (s: string) => s,
+  withTerminalFontIsolation: (_id: string, s: string) => s,
+}));
 vi.mock("@/lib/terminalEncode", () => ({
   base64ToBytes: (_base64: string) => new Uint8Array(),
   bytesToBase64: () => "",
@@ -154,7 +170,9 @@ describe("terminalRegistry", () => {
     hoisted.webglAddonCtor.mockClear();
     hoisted.webglAddonDisposeSpy.mockClear();
     hoisted.webglContextLossDisposeSpy.mockClear();
+    hoisted.webglClearTextureAtlasSpy.mockClear();
     hoisted.setWebglEnabledSpy.mockClear();
+    hoisted.reportWebglFailureSpy.mockClear();
     hoisted.disposeOrder.length = 0;
   });
 

@@ -5,7 +5,7 @@ import { ReactRenderer } from "@tiptap/react";
 import Suggestion, { type SuggestionKeyDownProps, type SuggestionProps } from "@tiptap/suggestion";
 import tippy, { type Instance } from "tippy.js";
 import { useSnippetStore } from "@/stores/snippetStore";
-import { ListSnippets } from "../../../../wailsjs/go/app/App";
+import { ListSnippets } from "../../../../wailsjs/go/extension/Extension";
 import { snippet_svc } from "../../../../wailsjs/go/models";
 import { MentionList, type MentionItem, type MentionListRef } from "../MentionList";
 import {

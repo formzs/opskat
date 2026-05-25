@@ -13,7 +13,7 @@ import { CommandPolicyCard } from "@/components/asset/CommandPolicyCard";
 import { DetailGrid, DetailSection, InfoItem } from "@/components/asset/detail/InfoItem";
 import { DISABLED_VALUE, ENABLED_VALUE, MASKED_SECRET, parseDetailConfig } from "@/components/asset/detail/utils";
 import { asset_entity } from "../../../wailsjs/go/models";
-import { GetDefaultPolicy } from "../../../wailsjs/go/app/App";
+import { GetDefaultPolicy } from "../../../wailsjs/go/system/System";
 
 interface AssetDetailProps {
   asset: asset_entity.Asset;

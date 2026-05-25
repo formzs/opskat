@@ -1,12 +1,7 @@
 import { create } from "zustand";
-import {
-  ExecuteSQL,
-  RedisGetKeyDetail,
-  RedisListDatabases,
-  RedisScanKeys,
-  ListMongoDatabases,
-  ListMongoCollections,
-} from "../../wailsjs/go/app/App";
+import { ExecuteSQL } from "../../wailsjs/go/query/Query";
+import { RedisGetKeyDetail, RedisListDatabases, RedisScanKeys } from "../../wailsjs/go/redis/Redis";
+import { ListMongoDatabases, ListMongoCollections } from "../../wailsjs/go/query/Query";
 import { asset_entity } from "../../wailsjs/go/models";
 import { useTabStore, registerTabCloseHook, registerTabRestoreHook, type QueryTabMeta } from "./tabStore";
 import { useAssetStore } from "./assetStore";

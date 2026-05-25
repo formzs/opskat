@@ -3,8 +3,7 @@ package command
 import (
 	"testing"
 
-	"github.com/opskat/opskat/internal/ai"
-
+	"github.com/opskat/opskat/internal/ai/aictx"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
@@ -60,14 +59,14 @@ func TestFormatOfflineDenyMessage(t *testing.T) {
 func TestApprovalResultToCheckResult(t *testing.T) {
 	Convey("ApprovalResult.ToCheckResult", t, func() {
 		ar := ApprovalResult{
-			Decision:       ai.Allow,
-			DecisionSource: ai.SourcePolicyAllow,
+			Decision:       aictx.Allow,
+			DecisionSource: aictx.SourcePolicyAllow,
 			MatchedPattern: "ls *",
 			SessionID:      "sess-123",
 		}
 		cr := ar.ToCheckResult()
-		So(cr.Decision, ShouldEqual, ai.Allow)
-		So(cr.DecisionSource, ShouldEqual, ai.SourcePolicyAllow)
+		So(cr.Decision, ShouldEqual, aictx.Allow)
+		So(cr.DecisionSource, ShouldEqual, aictx.SourcePolicyAllow)
 		So(cr.MatchedPattern, ShouldEqual, "ls *")
 	})
 }

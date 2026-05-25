@@ -110,6 +110,7 @@ export function TerminalSection() {
     setEnableImagePreview,
     webglEnabled,
     setWebglEnabled,
+    webglError,
     customThemes,
     addCustomTheme,
     updateCustomTheme,
@@ -186,6 +187,16 @@ export function TerminalSection() {
             <div className="grid gap-1">
               <Label>{t("terminal.gpuAcceleration")}</Label>
               <p className="text-xs text-muted-foreground">{t("terminal.gpuAccelerationHint")}</p>
+              {webglError && (
+                <p className="text-xs text-destructive">
+                  {t(
+                    webglError.cause === "context-loss"
+                      ? "terminal.gpuAccelerationErrorContextLoss"
+                      : "terminal.gpuAccelerationErrorInitThrew"
+                  )}
+                  {webglError.message ? `: ${webglError.message}` : null}
+                </p>
+              )}
             </div>
             <Switch checked={webglEnabled} onCheckedChange={setWebglEnabled} />
           </div>

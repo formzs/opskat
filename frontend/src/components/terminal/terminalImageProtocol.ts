@@ -1,5 +1,5 @@
 import type { Terminal as XTerminal } from "@xterm/xterm";
-import { WriteSSH } from "../../../wailsjs/go/app/App";
+import { WriteSSH } from "../../../wailsjs/go/ssh/SSH";
 import { bytesToBase64 } from "@/lib/terminalEncode";
 
 const KITTY_ESCAPE = "\x1b_G";
