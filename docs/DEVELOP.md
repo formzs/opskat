@@ -103,6 +103,7 @@ Common emoji (aligned with the changelog categories in [`/release`](../.claude/s
 - **Go:** mocks in `mock_*/` (`go.uber.org/mock`, regen `go generate ./...`); tests use goconvey + testify. Service tests mock transaction boundaries — when code uses `dbutil.WithTransaction`, prefer `dbutil.WithTransactionRunner` over opening in-memory SQLite.
 - **Frontend:** Prettier 120 col, 2-space.
 - **Versioning:** version info is embedded with ldflags.
+- **Windows child processes:** commands launched from the GUI must not flash a console window. For `exec.Command` paths, call `internal/pkg/executil.HideWindow` for fully hidden children, or `HideConsoleWindow` when only console-subsystem helpers should be suppressed while GUI programs remain visible. The Windows local terminal path is different: `internal/service/localterm_svc/pty_windows.go` starts shells through `internal/pkg/winconpty`, whose process creation flags must include `CREATE_NO_WINDOW`; this prevents the black console flash when opening a `local` asset. If the flash regresses, fix the ConPTY process creation path first instead of adding frontend or call-site fallbacks.
 
 ## Logging for key flows
 

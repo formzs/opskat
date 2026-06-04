@@ -5,6 +5,8 @@ package localterm_svc
 import (
 	"os"
 	"os/exec"
+
+	"github.com/opskat/opskat/internal/pkg/executil"
 )
 
 // DetectShells 探测本机:pwsh/powershell/cmd + Git Bash + WSL 发行版。
@@ -41,7 +43,9 @@ func DetectShells() []ShellInfo {
 
 // listWSLDistros 跑 `wsl -l -q` 列出已装发行版,解析委托给 parseWSLOutput。
 func listWSLDistros(wslPath string) []string {
-	raw, err := exec.Command(wslPath, "-l", "-q").Output()
+	cmd := exec.Command(wslPath, "-l", "-q")
+	executil.HideConsoleWindow(cmd)
+	raw, err := cmd.Output()
 	if err != nil {
 		return nil
 	}

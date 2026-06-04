@@ -6,11 +6,11 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/UserExistsError/conpty"
+	"github.com/opskat/opskat/internal/pkg/winconpty"
 )
 
 type winPTY struct {
-	cpty *conpty.ConPty
+	cpty *winconpty.ConPty
 }
 
 // windowsDefaultShell 按 pwsh → powershell → cmd 兜底。
@@ -27,8 +27,8 @@ func windowsDefaultShell() string {
 }
 
 func startPTY(spec ptySpec) (ptyProcess, error) {
-	if !conpty.IsConPtyAvailable() {
-		return nil, conpty.ErrConPtyUnsupported
+	if !winconpty.IsConPtyAvailable() {
+		return nil, winconpty.ErrConPtyUnsupported
 	}
 	shell := spec.Shell
 	if shell == "" {
@@ -41,9 +41,9 @@ func startPTY(spec ptySpec) (ptyProcess, error) {
 	}
 
 	cols, rows := clampSize(spec.Cols, spec.Rows)
-	opts := []conpty.ConPtyOption{conpty.ConPtyDimensions(cols, rows)}
-	opts = append(opts, conpty.ConPtyWorkDir(cwd))
-	cpty, err := conpty.Start(cmdline, opts...)
+	opts := []winconpty.ConPtyOption{winconpty.ConPtyDimensions(cols, rows)}
+	opts = append(opts, winconpty.ConPtyWorkDir(cwd))
+	cpty, err := winconpty.Start(cmdline, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (p *winPTY) Resize(cols, rows int) error {
 }
 
 func (p *winPTY) Close() error {
-	// conpty@v0.1.4 的 ConPty.Close() 同步完成全部回收:
+	// winconpty 的 ConPty.Close() 同步完成全部回收:
 	// ClosePseudoConsole 关闭伪控制台并杀掉挂接的子进程,随后 closeHandles
 	// 关闭进程/线程句柄与全部管道句柄。因此一次同步 Close 即可——既能立刻
 	// 关闭伪控制台触发子进程退出(断开活动会话无多秒延迟),又不残留句柄。

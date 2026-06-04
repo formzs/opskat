@@ -13,6 +13,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/opskat/opskat/internal/bootstrap"
+	"github.com/opskat/opskat/internal/pkg/executil"
 	"github.com/opskat/opskat/internal/repository/audit_repo"
 
 	"github.com/cago-frame/cago/pkg/logger"
@@ -113,6 +114,7 @@ func NewService(opts Options) (*Service, error) {
 	if opts.Launch == nil {
 		opts.Launch = launcherFunc(func(execPath string, args []string) error {
 			cmd := exec.Command(execPath, args...) //nolint:gosec // path and args are validated before launch
+			executil.HideConsoleWindow(cmd)
 			return cmd.Start()
 		})
 	}

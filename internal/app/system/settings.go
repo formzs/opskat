@@ -1401,7 +1401,9 @@ func detectOSVersion() string {
 		}
 		return ""
 	case "windows":
-		out, err := exec.Command("cmd", "/c", "ver").Output()
+		cmd := exec.Command("cmd", "/c", "ver")
+		executil.HideConsoleWindow(cmd)
+		out, err := cmd.Output()
 		if err != nil {
 			return ""
 		}

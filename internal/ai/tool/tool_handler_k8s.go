@@ -18,6 +18,7 @@ import (
 	"github.com/opskat/opskat/internal/ai/helper"
 	"github.com/opskat/opskat/internal/ai/permission"
 	"github.com/opskat/opskat/internal/model/entity/asset_entity"
+	"github.com/opskat/opskat/internal/pkg/executil"
 	"github.com/opskat/opskat/internal/repository/asset_repo"
 	"github.com/opskat/opskat/internal/service/asset_svc"
 	"github.com/opskat/opskat/internal/service/credential_svc"
@@ -252,6 +253,7 @@ func executeK8sCommandLocal(ctx context.Context, kubeconfig string, args []strin
 	defer removeTempFile(kubeconfigPath)
 
 	cmd := exec.CommandContext(ctx, "kubectl", args...) //nolint:gosec
+	executil.HideConsoleWindow(cmd)
 	cmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfigPath)
 
 	var stdout, stderr bytes.Buffer
