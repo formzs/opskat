@@ -22,13 +22,15 @@
   },
   "nav": {
     "home": "首页",
-    "database": "数据库",
+    "database": "SQL 数据库",
     "ssh": "SSH",
     "redis": "Redis",
     "mongodb": "MongoDB",
     "kafka": "Kafka",
     "k8s": "K8S 集群",
     "serial": "串口",
+    "local": "本地终端",
+    "etcd": "etcd",
     "sshKeys": "密钥管理",
     "settings": "设置",
     "appearance": "外观",
@@ -36,6 +38,16 @@
     "audit": "审计日志",
     "forward": "端口转发",
     "snippets": "代码片段"
+  },
+  "assetType": {
+    "searchPlaceholder": "搜索类型…",
+    "noResults": "无匹配类型",
+    "group": {
+      "servers": "服务器与终端",
+      "databases": "数据库",
+      "middleware": "中间件与平台",
+      "extension": "扩展"
+    }
   },
   "forward": {
     "create": "新建配置",
@@ -71,8 +83,10 @@
     "edit": "编辑",
     "add": "添加",
     "copy": "复制",
+    "copied": "已复制",
     "close": "关闭",
     "submit": "提交",
+    "browse": "选择",
     "openInTab": "在新标签打开",
     "editPermission": "资产详情",
     "open": "打开",
@@ -129,6 +143,7 @@
     "group": "分组",
     "description": "描述",
     "groupName": "分组名称",
+    "editGroupSettings": "编辑组设置",
     "groupDescriptionPlaceholder": "描述该分组的用途（可选，AI可见）",
     "search": "搜索...",
     "filterByType": "按资产类型筛选",
@@ -237,6 +252,7 @@
     "formMissingKafkaBrokers": "请填写 Bootstrap Brokers。",
     "formMissingKubeconfig": "请提供 kubeconfig。",
     "formMissingSerialPort": "请填写串口路径。",
+    "formMissingPath": "请填写数据库文件路径。",
     "moveUp": "上移",
     "moveDown": "下移",
     "moveTop": "置顶",
@@ -248,10 +264,17 @@
     "typeKafka": "Kafka",
     "typeK8s": "K8S 集群",
     "typeSerial": "串口",
+    "typeEtcd": "etcd",
     "driver": "数据库类型",
     "driverMySQL": "MySQL",
     "driverPostgreSQL": "PostgreSQL",
     "driverMongoDB": "MongoDB",
+    "driverMSSQL": "SQL Server",
+    "driverSQLite": "SQLite",
+    "sqliteFilePath": "数据库文件路径",
+    "sqliteFilePathPlaceholder": "/Users/.../my.db",
+    "sqliteFilePathBrowse": "选择文件…",
+    "mssqlReadOnlyHint": "SQL Server 仅通过策略拦截写操作，连接级不强制只读",
     "database": "默认数据库",
     "databasePlaceholder": "数据库名（可选）",
     "sslMode": "SSL 模式",
@@ -323,6 +346,12 @@
     "k8sPolicyHint": "未列出的命令将请求用户确认后执行；规则支持使用 * 通配，范围过宽（如 *）可能放行高风险命令或误拒大量命令，请谨慎配置。",
     "k8sPolicyPlaceholder": "输入命令规则后按回车，支持逗号分隔批量添加",
     "k8sPolicyTestPlaceholder": "输入 kubectl 命令测试，如: kubectl get pods",
+    "etcdPolicy": "etcd 操作权限",
+    "etcdPolicyAllowList": "允许列表（直接执行，无需确认）",
+    "etcdPolicyDenyList": "拒绝列表（始终拒绝执行）",
+    "etcdPolicyHint": "未列出的 etcd 操作将请求用户确认后执行；规则支持使用 * 通配，范围过宽（如 *）可能放行高风险操作或误拒大量操作，请谨慎配置。",
+    "etcdPolicyPlaceholder": "输入 etcd 操作规则，如: get /app/*",
+    "policyTestEtcdPlaceholder": "输入 etcd 操作测试，如: get /app/config",
     "k8sKubeconfigProvided": "已提供 kubeconfig",
     "k8sNamespace": "命名空间",
     "k8sContext": "Context",
@@ -344,6 +373,16 @@
     "serialRefreshPorts": "刷新串口",
     "serialNoPortsDetected": "未检测到串口",
     "serialManualInput": "手动输入路径",
+    "localTitle": "本地终端",
+    "localShell": "Shell",
+    "localShellPreset": "已探测到的 shell…",
+    "localShellPlaceholder": "如 /bin/zsh、pwsh.exe",
+    "localDefaultShell": "系统默认",
+    "localArgs": "启动参数",
+    "localArgsPlaceholder": "如 -l、--login",
+    "localCwd": "工作目录",
+    "localCwdPlaceholder": "如 ~ 或 /home/user",
+    "typeLocal": "本地终端",
     "k8sVersion": "版本",
     "k8sPlatform": "平台",
     "k8sNodes": "节点",
@@ -448,22 +487,90 @@
       "deleteConfirmTitle": "确认删除权限组",
       "deleteConfirm": "确定删除权限组 \"{{name}}\"？此操作不可撤销。",
       "builtin": {
-        "linux-readonly": { "name": "Linux 常用只读", "desc": "常用 Linux 只读命令" },
-        "k8s-readonly": { "name": "Kubernetes 只读", "desc": "Kubernetes 只读操作命令" },
-        "k8s-dangerous-deny": { "name": "Kubernetes 高危拒绝", "desc": "拒绝执行高危 Kubernetes 命令" },
-        "docker-readonly": { "name": "Docker 只读", "desc": "Docker 只读操作命令" },
-        "dangerous-deny": { "name": "高危命令拒绝", "desc": "拒绝执行高危系统命令" },
-        "sql-readonly": { "name": "SQL 只读", "desc": "只允许查询类 SQL 语句" },
-        "sql-dangerous-deny": { "name": "SQL 高危拒绝", "desc": "拒绝高危 SQL 操作" },
-        "redis-readonly": { "name": "Redis 只读", "desc": "只允许 Redis 只读命令" },
-        "redis-dangerous-deny": { "name": "Redis 高危拒绝", "desc": "拒绝 Redis 高危命令" },
-        "kafka-metadata-readonly": { "name": "Kafka 元数据只读", "desc": "允许读取集群、Broker、Topic 和消费组元数据" },
-        "kafka-message-read": { "name": "Kafka 消息读取", "desc": "允许读取消息内容" },
-        "kafka-schema-readonly": { "name": "Schema Registry 只读", "desc": "允许读取 Schema Registry 元数据和 Schema" },
-        "kafka-connect-readonly": { "name": "Kafka Connect 只读", "desc": "允许读取连接器状态和配置" },
-        "kafka-operator": { "name": "Kafka 运维操作", "desc": "允许 Topic、分区和消费组偏移等管理操作" },
-        "kafka-security-admin": { "name": "Kafka 安全管理", "desc": "允许管理 Kafka ACL" },
-        "kafka-dangerous-deny": { "name": "Kafka 高危拒绝", "desc": "拒绝删除、截断和安全变更等高危操作" }
+        "linux-readonly": {
+          "name": "Linux 常用只读",
+          "desc": "常用 Linux 只读命令"
+        },
+        "k8s-readonly": {
+          "name": "Kubernetes 只读",
+          "desc": "Kubernetes 只读操作命令"
+        },
+        "k8s-dangerous-deny": {
+          "name": "Kubernetes 高危拒绝",
+          "desc": "拒绝执行高危 Kubernetes 命令"
+        },
+        "docker-readonly": {
+          "name": "Docker 只读",
+          "desc": "Docker 只读操作命令"
+        },
+        "dangerous-deny": {
+          "name": "高危命令拒绝",
+          "desc": "拒绝执行高危系统命令"
+        },
+        "sql-readonly": {
+          "name": "SQL 只读",
+          "desc": "只允许查询类 SQL 语句"
+        },
+        "sql-dangerous-deny": {
+          "name": "SQL 高危拒绝",
+          "desc": "拒绝高危 SQL 操作"
+        },
+        "redis-readonly": {
+          "name": "Redis 只读",
+          "desc": "只允许 Redis 只读命令"
+        },
+        "redis-dangerous-deny": {
+          "name": "Redis 高危拒绝",
+          "desc": "拒绝 Redis 高危命令"
+        },
+        "mongo-readonly": {
+          "name": "MongoDB 只读",
+          "desc": "只允许 MongoDB 只读操作"
+        },
+        "mongo-readwrite": {
+          "name": "MongoDB 读写",
+          "desc": "允许 MongoDB 增删改查操作"
+        },
+        "mongo-dangerous-deny": {
+          "name": "MongoDB 高危拒绝",
+          "desc": "拒绝 MongoDB 高危操作"
+        },
+        "kafka-metadata-readonly": {
+          "name": "Kafka 元数据只读",
+          "desc": "允许读取集群、Broker、Topic 和消费组元数据"
+        },
+        "kafka-message-read": {
+          "name": "Kafka 消息读取",
+          "desc": "允许读取消息内容"
+        },
+        "kafka-schema-readonly": {
+          "name": "Schema Registry 只读",
+          "desc": "允许读取 Schema Registry 元数据和 Schema"
+        },
+        "kafka-connect-readonly": {
+          "name": "Kafka Connect 只读",
+          "desc": "允许读取连接器状态和配置"
+        },
+        "kafka-operator": {
+          "name": "Kafka 运维操作",
+          "desc": "允许 Topic、分区和消费组偏移等管理操作"
+        },
+        "kafka-security-admin": {
+          "name": "Kafka 安全管理",
+          "desc": "允许管理 Kafka ACL"
+        },
+        "kafka-dangerous-deny": {
+          "name": "Kafka 高危拒绝",
+          "desc": "拒绝删除、截断和安全变更等高危操作"
+        },
+        "etcd-readonly": {
+          "name": "etcd 只读",
+          "desc": "只允许 etcd 只读操作"
+        },
+        "etcd-dangerous-deny": {
+          "name": "etcd 高危拒绝",
+          "desc": "拒绝 etcd 高危操作"
+        }
       }
     }
   },
@@ -900,6 +1007,8 @@
     "recording": "请按下快捷键...",
     "reset": "恢复默认",
     "resetAll": "全部恢复默认",
+    "swapCmdCtrl": "⌘ ⇄ ⌃",
+    "swapCmdCtrlDesc": "将所有快捷键的 ⌘ 与 ⌃ 互换，再点一次换回",
     "tab.1": "切换到标签 1",
     "tab.2": "切换到标签 2",
     "tab.3": "切换到标签 3",
@@ -1037,6 +1146,136 @@
       "brightWhite": "亮白"
     }
   },
+  "externalEdit": {
+    "saving": "正在自动保存…",
+    "panel": {
+      "title": "外部编辑",
+      "conflicts": "冲突文件",
+      "errors": "待恢复文件",
+      "recoveries": "恢复入口",
+      "attentionCount": "{{count}} 项待处理",
+      "remoteSnapshotReady": "已获取远端新副本",
+      "currentDraft": "当前冲突稿",
+      "retainedDraft": "保留旧稿",
+      "rereadDraft": "重读后新稿",
+      "rereadDraftHint": "继续修改后会沿当前同步链路保存或重新进入冲突区",
+      "rereadBaselineHint": "读取远程新版本后，将以远程新版本为基线进行修改。",
+      "autoSavePending": "准备自动同步",
+      "autoSaveRunning": "正在自动同步",
+      "recreateReadyHint": "当前活动主稿可直接重新创建缺失的远程文件。",
+      "recreateUnavailableState": "只有当前活动主稿处于“远程文件不存在”时，才能重新创建远程文件。",
+      "recreateUnavailableBusy": "请先等待当前保存动作结束，再重新创建远程文件。",
+      "recreateUnavailableActiveDraft": "当前已经有更新的活动稿，请改在该稿上继续处理。"
+    },
+    "actions": {
+      "open": "外部编辑",
+      "sync": "保存到远程",
+      "refresh": "刷新远程状态",
+      "compare": "比对差异",
+      "acceptRemote": "接收远程",
+      "reread": "读取远程新版本",
+      "overwrite": "覆盖远程",
+      "saveAgain": "重新创建远程文件",
+      "viewError": "查看错误",
+      "viewRecovery": "查看恢复",
+      "reopenLocal": "重新打开本地副本",
+      "continueEdit": "继续修改",
+      "merge": "三栏合并",
+      "saveMerge": "保存合并稿",
+      "hideRecord": "关闭记录（保留本地副本）",
+      "deleteLocal": "删除记录并删除本地副本"
+    },
+    "pending": {
+      "entry": "外部编辑待处理",
+      "title": "外部编辑待处理文件",
+      "description": "冲突、错误和恢复文件统一在这里处理。关闭窗口不会丢失记录。",
+      "empty": "当前没有待处理文件。"
+    },
+    "state": {
+      "clean": "已同步",
+      "dirty": "本地已修改",
+      "conflict": "远程已变更",
+      "remote_missing": "远程文件不存在",
+      "stale": "冲突副本",
+      "expired": "会话已过期"
+    },
+    "recordState": {
+      "active": "编辑中",
+      "conflict": "待处理冲突",
+      "error": "待恢复",
+      "completed": "已完成",
+      "abandoned": "已隐藏"
+    },
+    "conflict": {
+      "remoteChangedTitle": "远程文件已变更",
+      "remoteMissingTitle": "远程文件不存在"
+    },
+    "error": {
+      "title": "同步失败详情",
+      "summaryLabel": "失败摘要",
+      "stepLabel": "失败步骤",
+      "suggestionLabel": "建议动作",
+      "safeActionFailed": "外部编辑操作失败，请在待处理入口查看状态后重试。"
+    },
+    "recovery": {
+      "title": "恢复外部编辑",
+      "summary": "检测到异常关闭前的本地副本，可重新打开继续处理。",
+      "description": "恢复只会重新打开本地副本，不会自动上传远端；确认内容后请手动保存。"
+    },
+    "merge": {
+      "title": "三栏合并",
+      "localDraft": "本地草稿（只读）",
+      "finalDraft": "最终稿（可编辑）",
+      "remoteDraft": "远端新版本（只读）",
+      "helper": "左本地、中最终稿、右远端；保存前会再次确认远端未变化。",
+      "changelist": "冲突文件",
+      "readOnlySide": "只读",
+      "editableCenter": "可编辑",
+      "status": "三栏合并工作台",
+      "localCenterRemote": "左本地 / 中最终 / 右远端",
+      "previous": "上一处冲突",
+      "next": "下一处冲突",
+      "closeDirtyTitle": "放弃未提交的合并稿？",
+      "closeDirtyDesc": "关闭合并窗口不会删除冲突记录，但当前未保存的最终稿编辑会丢失。",
+      "closeDirtyConfirm": "放弃并关闭"
+    },
+    "compare": {
+      "title": "只读差异比对",
+      "localDraft": "本地草稿",
+      "remoteSnapshot": "远端快照",
+      "readOnly": "只读",
+      "projectView": "冲突文件",
+      "status": "只读差异工作台",
+      "remoteLeftLocalRight": "左远端 / 右本地",
+      "previous": "上一处不同点",
+      "next": "下一处不同点",
+      "loadFailed": "对比视图加载失败",
+      "helper": "左侧远端，右侧本地；支持行号与同步滚动，便于逐段观察差异。"
+    },
+    "settings": {
+      "tab": "外部编辑",
+      "title": "外部编辑器",
+      "desc": "配置默认外部编辑器、本地工作区和自定义编辑器。",
+      "defaultEditor": "默认外部编辑器",
+      "workspaceRoot": "临时工作区",
+      "cleanupRetentionDays": "副本清理保留天数",
+      "cleanupRetentionDaysHint": "默认 7 天，允许 1-365 天；用于清理非活动副本和 backup 历史副本。",
+      "maxReadFileSizeMB": "最大读取大小（MB）",
+      "maxReadFileSizeMBHint": "默认 10 MB，允许 1-1024 MB；超过该阈值时会拒绝完整读取，并提示前往 设置 > External Edit 调整。",
+      "customEditors": "自定义编辑器",
+      "addEditor": "新增自定义编辑器",
+      "addEditorTitle": "新增自定义编辑器",
+      "editEditorTitle": "编辑自定义编辑器",
+      "editorDialogDesc": "每次只编辑一条自定义编辑器配置，确认后再统一保存设置。",
+      "editorPath": "编辑器路径",
+      "editorArgs": "启动参数",
+      "emptyCustomEditors": "暂未添加自定义编辑器。",
+      "defaultBadge": "默认",
+      "noArgs": "无启动参数",
+      "editorUnavailable": "可执行路径修复前暂不可用",
+      "saved": "外部编辑设置已保存"
+    }
+  },
   "integration": {
     "title": "集成",
     "desc": "CLI 工具和 AI 插件集成",
@@ -1142,7 +1381,6 @@
     "batchDescription": "以下 {{count}} 条操作需要您的批准",
     "alwaysAllow": "始终允许",
     "approve": "批准",
-    "allow": "允许",
     "scopeAll": "所有资产"
   },
   "audit": {
@@ -1218,6 +1456,7 @@
     "loadError": "加载失败",
     "retry": "重试",
     "refresh": "刷新",
+    "newFolder": "新建文件夹",
     "openFolder": "打开",
     "dropToUpload": "拖放文件到此处上传",
     "transfers": "传输记录",
@@ -1225,6 +1464,76 @@
     "selectDownloadFile": "选择下载文件",
     "deleteConfirmTitle": "确认删除",
     "deleteConfirmDesc": "确定要删除 \"{{name}}\" 吗？此操作不可撤销。",
+    "deleteMultiDesc": "确定要永久删除选中的 {{count}} 项吗？",
+    "newFile": "新建文件",
+    "folderNamePlaceholder": "folder-name",
+    "filenamePlaceholder": "file-name.txt",
+    "ready": "就绪",
+    "selectedItems": "已选择 {{count}} 项（{{size}}）",
+    "clipboardCopy": "剪贴板：复制 {{count}} 项",
+    "clipboardCut": "剪贴板：剪切 {{count}} 项",
+    "currentPathCopied": "当前路径已复制",
+    "filePathCopied": "文件地址已复制",
+    "menu": {
+      "openTerminal": "在终端中打开",
+      "downloadFolder": "下载文件夹",
+      "downloadFile": "下载文件",
+      "downloadSelected": "下载所选（{{count}} 项）",
+      "cut": "剪切",
+      "cutSelected": "剪切所选（{{count}} 项）",
+      "copy": "复制",
+      "copySelected": "复制所选（{{count}} 项）",
+      "copyFilePath": "复制文件地址",
+      "copySelectedFilePaths": "复制所选文件地址（{{count}} 项）",
+      "paste": "粘贴",
+      "rename": "重命名",
+      "permission": "权限",
+      "properties": "属性",
+      "delete": "删除",
+      "deleteSelected": "删除所选（{{count}} 项）",
+      "newFile": "新建文件",
+      "copyCurrentPath": "复制当前路径"
+    },
+    "permission": {
+      "title": "权限与属主",
+      "matrix": "Linux 权限矩阵",
+      "read": "读",
+      "write": "写",
+      "execute": "执行",
+      "owner": "属主",
+      "group": "属组",
+      "others": "其他",
+      "octalMode": "八进制",
+      "presetWebStatic": "Web 静态",
+      "presetDirectory": "目录",
+      "presetPrivateKey": "私钥",
+      "presetExecutable": "可执行",
+      "chown": "属主/属组",
+      "ownerUser": "属主用户",
+      "ownerUserPlaceholder": "www 或 root",
+      "ownerGroup": "属主用户组",
+      "ownerGroupPlaceholder": "www-data 或 root",
+      "recursive": "递归应用",
+      "recursiveAll": "应用到所有文件与目录",
+      "recursiveFiles": "仅文件",
+      "recursiveDirs": "仅目录"
+    },
+    "properties": {
+      "title": "属性",
+      "loading": "加载中…",
+      "path": "路径",
+      "type": "类型",
+      "typeFolder": "文件夹",
+      "typeFile": "文件",
+      "size": "大小",
+      "sizeBytes": "{{display}}（{{bytes}} 字节）",
+      "children": "子项数量",
+      "mode": "权限",
+      "owner": "属主 UID",
+      "group": "属主 GID",
+      "modified": "修改时间",
+      "approximate": "(近似)"
+    },
     "sync": {
       "panelFromTerminal": "让当前目录跟随当前终端目录",
       "terminalFromPanel": "让当前终端切换到当前目录",
@@ -1806,6 +2115,10 @@
     "designTableColumnNameRequired": "字段名不能为空",
     "designTableColumnTypeRequired": "字段类型不能为空",
     "designTableDuplicateColumn": "字段名重复：{{name}}",
+    "alterSqliteLimitations": "SQLite 不支持修改已有字段的类型、默认值、可空性和列/表注释；可以重命名字段、新增字段或删除字段。",
+    "alterSqliteUnsupportedTableComment": "SQLite 不支持表注释",
+    "alterMssqlLimitations": "SQL Server 暂不支持在此修改已有字段的默认值，以及表/列注释；可以重命名、新增、删除字段，并修改字段类型和可空性。",
+    "alterMssqlUnsupportedTableComment": "SQL Server 表注释走扩展属性，暂不支持在此编辑",
     "alterActionAdd": "新增列",
     "alterActionType": "改类型",
     "alterActionDrop": "删列",
@@ -2054,6 +2367,102 @@
       "noMatch": "无匹配的片段",
       "empty": "还没有 prompt 片段",
       "openManager": "到代码片段页创建"
+    }
+  },
+  "etcd": {
+    "form": {
+      "endpoints": "Endpoints",
+      "endpointsHint": "至少 1 条 host:port，可多行",
+      "addEndpoint": "添加 endpoint",
+      "tlsSection": "TLS / mTLS",
+      "advancedSection": "高级",
+      "dialTimeout": "Dial 超时（秒）",
+      "commandTimeout": "命令超时（秒）",
+      "test": "测试连接",
+      "tlsServerName": "Server Name",
+      "tlsCAFile": "CA 证书路径",
+      "tlsCertFile": "客户端证书路径",
+      "tlsKeyFile": "客户端私钥路径",
+      "tlsInsecure": "跳过证书校验"
+    },
+    "tree": {
+      "title": "Keyspace",
+      "filterPlaceholder": "过滤 key",
+      "truncated": "+{{count}} 隐藏，limit={{limit}}",
+      "loadFailed": "加载 keyspace 失败"
+    },
+    "query": {
+      "placeholder": "get /config --prefix",
+      "templates": "模板",
+      "execute": "执行",
+      "history": "历史",
+      "deleteConfirmTitle": "确认删除",
+      "deleteConfirmBody": "将删除 key: {{key}}",
+      "deletePrefixWarning": "即将通过 --prefix 批量删除，请确认。",
+      "execConfirmTitle": "确认执行破坏性命令",
+      "execConfirmBody": "即将执行: {{command}}\n请确认命令、键范围与 --prefix 等参数无误。",
+      "execSuccess": "执行成功",
+      "execFailed": "执行失败",
+      "elapsed": "耗时 {{ms}}ms",
+      "noResult": "暂无结果，输入命令并执行"
+    },
+    "detail": {
+      "selectKey": "在左侧选择一个 key 查看详情",
+      "loading": "加载中…",
+      "empty": "无数据",
+      "metaModRev": "MOD REV",
+      "metaCreateRev": "CREATE REV",
+      "metaVersion": "VERSION",
+      "metaLease": "LEASE",
+      "metaSize": "SIZE",
+      "metaValueType": "VALUE TYPE",
+      "metaLeaseNone": "none",
+      "valueLabel": "VALUE",
+      "edit": "编辑",
+      "save": "保存",
+      "cancel": "取消",
+      "saveSuccess": "已保存",
+      "saveFailed": "保存失败",
+      "saveConfirmTitle": "确认写入 key",
+      "saveConfirmBody": "将覆盖 key: {{key}}",
+      "formatRaw": "Raw",
+      "formatJson": "JSON",
+      "formatYaml": "YAML",
+      "notJson": "(非 JSON)",
+      "notYaml": "(无法转 YAML)",
+      "copyKey": "复制 KEY",
+      "copyValue": "复制原始值",
+      "delete": "删除",
+      "copied": "已复制到剪贴板",
+      "copyFailed": "复制失败",
+      "deleteSuccess": "已删除 key: {{key}}",
+      "deleteFailed": "删除失败",
+      "history": "历史版本",
+      "historyAt": "查看 revision {{rev}}",
+      "historyLoading": "正在加载历史版本…",
+      "historyEmpty": "无更早版本（可能已被 compact）",
+      "historyLatest": "当前最新",
+      "historyItem": "rev {{rev}} · ver {{ver}}",
+      "historyFailed": "加载历史版本失败",
+      "historyCleared": "返回当前版本",
+      "contentTypeJson": "application/json",
+      "contentTypeText": "text/plain",
+      "contentTypeEmpty": "(empty)"
+    },
+    "cluster": {
+      "healthy": "健康",
+      "unhealthy": "异常",
+      "unknown": "未知",
+      "endpoints": "{{count}} 个 endpoint",
+      "leader": "leader",
+      "noLeader": "无 leader",
+      "refresh": "刷新集群状态",
+      "loadFailed": "加载集群信息失败"
+    },
+    "error": {
+      "endpointsRequired": "至少需要 1 个 endpoint",
+      "compactionRev": "该版本已被压缩，最早可用版本: {{rev}}",
+      "connFailed": "连接 etcd 失败"
     }
   }
 }

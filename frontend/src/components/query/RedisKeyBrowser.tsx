@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
+import { notifyCopied } from "@/lib/notify";
 import { Button, Input, ConfirmDialog } from "@opskat/ui";
 import { useQueryStore } from "@/stores/queryStore";
 import { useTabStore, type QueryTabMeta } from "@/stores/tabStore";
@@ -419,7 +420,7 @@ export function RedisKeyBrowser({ tabId }: RedisKeyBrowserProps) {
   const handleCopyKeyName = useCallback(() => {
     if (!ctxMenu) return;
     navigator.clipboard.writeText(ctxMenu.key);
-    toast.success(t("query.copied"));
+    notifyCopied(t("query.copied"));
     setCtxMenu(null);
   }, [ctxMenu, t]);
 

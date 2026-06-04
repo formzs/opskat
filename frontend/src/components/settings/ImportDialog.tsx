@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import { Server, Folder, ChevronDown, ChevronRight, KeyRound } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Button, ScrollArea } from "@opskat/ui";
 import { import_svc } from "../../../wailsjs/go/models";
@@ -111,7 +112,7 @@ export function ImportDialog({ open, onOpenChange, preview, title, onImport }: I
     setImporting(true);
     try {
       const result = await onImport(Array.from(selected), { passphrase, overwrite });
-      toast.success(
+      notifySuccess(
         t("import.result", {
           total: result.total,
           success: result.success,

@@ -7,6 +7,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestDatabaseDriverDefaultPort(t *testing.T) {
+	convey.Convey("DatabaseDriver.DefaultPort", t, func() {
+		convey.So(DriverMySQL.DefaultPort(), convey.ShouldEqual, 3306)
+		convey.So(DriverPostgreSQL.DefaultPort(), convey.ShouldEqual, 5432)
+		convey.So(DriverMSSQL.DefaultPort(), convey.ShouldEqual, 1433)
+		convey.So(DriverSQLite.DefaultPort(), convey.ShouldEqual, 0)
+	})
+}
+
 func TestAsset_Validate(t *testing.T) {
 	convey.Convey("资产校验", t, func() {
 		convey.Convey("名称为空时应返回错误", func() {
@@ -437,5 +446,185 @@ func TestValidateKafka(t *testing.T) {
 			})
 			assert.Error(t, a.Validate())
 		})
+	})
+}
+
+func TestValidateDatabaseMSSQL(t *testing.T) {
+	convey.Convey("MSSQL driver validation", t, func() {
+		convey.Convey("缺 host 应报错", func() {
+			a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
+			cfg := &DatabaseConfig{Driver: DriverMSSQL, Port: 1433, Username: "sa"}
+			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
+			convey.So(a.Validate().Error(), convey.ShouldContainSubstring, "主机")
+		})
+		convey.Convey("port=0 应报错", func() {
+			a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
+			cfg := &DatabaseConfig{
+				Driver: DriverMSSQL, Host: "localhost",
+				Port: 0, Username: "sa",
+			}
+			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
+			convey.So(a.Validate().Error(), convey.ShouldContainSubstring, "端口")
+		})
+		convey.Convey("缺 username 应报错", func() {
+			a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
+			cfg := &DatabaseConfig{
+				Driver: DriverMSSQL, Host: "localhost",
+				Port: 1433,
+			}
+			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
+			convey.So(a.Validate().Error(), convey.ShouldContainSubstring, "用户名")
+		})
+		convey.Convey("完整字段通过", func() {
+			a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
+			cfg := &DatabaseConfig{
+				Driver: DriverMSSQL, Host: "localhost",
+				Port: 1433, Username: "sa",
+			}
+			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
+			convey.So(a.Validate(), convey.ShouldBeNil)
+		})
+	})
+}
+
+func TestValidateDatabaseSQLite(t *testing.T) {
+	convey.Convey("SQLite driver validation", t, func() {
+		convey.Convey("缺 path 应报错", func() {
+			a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
+			cfg := &DatabaseConfig{Driver: DriverSQLite}
+			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
+			convey.So(a.Validate().Error(), convey.ShouldContainSubstring, "path")
+		})
+		convey.Convey("path 非绝对路径应报错", func() {
+			a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
+			cfg := &DatabaseConfig{Driver: DriverSQLite, Path: "relative.db"}
+			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
+			convey.So(a.Validate().Error(), convey.ShouldContainSubstring, "绝对路径")
+		})
+		convey.Convey("SQLite 不允许 SSH 隧道", func() {
+			a := &Asset{
+				Type: AssetTypeDatabase, Name: "x", GroupID: 1,
+				SSHTunnelID: 5,
+			}
+			cfg := &DatabaseConfig{Driver: DriverSQLite, Path: "/tmp/x.db"}
+			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
+			convey.So(a.Validate().Error(), convey.ShouldContainSubstring, "隧道")
+		})
+		convey.Convey("绝对路径 + 无隧道通过", func() {
+			a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
+			cfg := &DatabaseConfig{Driver: DriverSQLite, Path: "/tmp/x.db"}
+			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
+			convey.So(a.Validate(), convey.ShouldBeNil)
+		})
+	})
+}
+
+func TestAsset_IsEtcd(t *testing.T) {
+	convey.Convey("IsEtcd", t, func() {
+		a := &Asset{Type: AssetTypeEtcd}
+		assert.True(t, a.IsEtcd())
+		assert.False(t, a.IsRedis())
+	})
+}
+
+func TestAsset_GetSetEtcdConfig(t *testing.T) {
+	convey.Convey("Get/SetEtcdConfig 往返", t, func() {
+		a := &Asset{Type: AssetTypeEtcd}
+		cfg := &EtcdConfig{
+			Endpoints: []string{"10.0.0.1:2379", "10.0.0.2:2379"},
+			Username:  "root",
+			TLS:       true,
+		}
+		assert.NoError(t, a.SetEtcdConfig(cfg))
+		got, err := a.GetEtcdConfig()
+		assert.NoError(t, err)
+		assert.Equal(t, cfg.Endpoints, got.Endpoints)
+		assert.Equal(t, cfg.Username, got.Username)
+		assert.True(t, got.TLS)
+	})
+
+	convey.Convey("GetEtcdConfig 非 etcd 资产返回错误", t, func() {
+		a := &Asset{Type: AssetTypeSSH}
+		_, err := a.GetEtcdConfig()
+		assert.Error(t, err)
+	})
+}
+
+func TestAsset_ValidateEtcd(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     *EtcdConfig
+		wantErr bool
+	}{
+		{"valid single", &EtcdConfig{Endpoints: []string{"127.0.0.1:2379"}}, false},
+		{"valid cluster", &EtcdConfig{Endpoints: []string{"10.0.0.1:2379", "10.0.0.2:2379"}}, false},
+		{"empty endpoints", &EtcdConfig{}, true},
+		{"endpoint missing port", &EtcdConfig{Endpoints: []string{"10.0.0.1"}}, true},
+		{"endpoint invalid port", &EtcdConfig{Endpoints: []string{"10.0.0.1:abc"}}, true},
+		{"endpoint port out of range", &EtcdConfig{Endpoints: []string{"10.0.0.1:70000"}}, true},
+		{"endpoint missing host", &EtcdConfig{Endpoints: []string{":2379"}}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &Asset{Name: "test", Type: AssetTypeEtcd}
+			assert.NoError(t, a.SetEtcdConfig(tc.cfg))
+			err := a.Validate()
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAsset_CanConnectEtcd(t *testing.T) {
+	convey.Convey("etcd 端点非空且 Status=Active 可连接", t, func() {
+		a := &Asset{Type: AssetTypeEtcd, Status: StatusActive}
+		assert.NoError(t, a.SetEtcdConfig(&EtcdConfig{Endpoints: []string{"127.0.0.1:2379"}}))
+		assert.True(t, a.CanConnect())
+	})
+	convey.Convey("etcd 端点为空不可连接", t, func() {
+		a := &Asset{Type: AssetTypeEtcd, Status: StatusActive}
+		assert.NoError(t, a.SetEtcdConfig(&EtcdConfig{Endpoints: nil}))
+		assert.False(t, a.CanConnect())
+	})
+	convey.Convey("etcd Status 非 Active 不可连接", t, func() {
+		a := &Asset{Type: AssetTypeEtcd, Status: StatusDeleted}
+		assert.NoError(t, a.SetEtcdConfig(&EtcdConfig{Endpoints: []string{"127.0.0.1:2379"}}))
+		assert.False(t, a.CanConnect())
+	})
+}
+
+func TestAsset_GetSetEtcdPolicy(t *testing.T) {
+	convey.Convey("Get/SetEtcdPolicy 往返", t, func() {
+		a := &Asset{Type: AssetTypeEtcd}
+		p := &EtcdPolicy{
+			AllowList: []string{"get *", "put *"},
+			DenyList:  []string{"member remove *"},
+		}
+		assert.NoError(t, a.SetEtcdPolicy(p))
+		got, err := a.GetEtcdPolicy()
+		assert.NoError(t, err)
+		assert.Equal(t, p.AllowList, got.AllowList)
+		assert.Equal(t, p.DenyList, got.DenyList)
+	})
+
+	convey.Convey("SetEtcdPolicy 空策略清空字段", t, func() {
+		a := &Asset{Type: AssetTypeEtcd}
+		assert.NoError(t, a.SetEtcdPolicy(&EtcdPolicy{AllowList: []string{"get *"}}))
+		assert.NotEmpty(t, a.CmdPolicy)
+		assert.NoError(t, a.SetEtcdPolicy(&EtcdPolicy{}))
+		assert.Empty(t, a.CmdPolicy)
+	})
+
+	convey.Convey("CmdPolicy 为空时 GetEtcdPolicy 返回零值", t, func() {
+		a := &Asset{Type: AssetTypeEtcd}
+		got, err := a.GetEtcdPolicy()
+		assert.NoError(t, err)
+		assert.NotNil(t, got)
+		assert.Empty(t, got.AllowList)
+		assert.Empty(t, got.DenyList)
+		assert.Empty(t, got.Groups)
 	})
 }

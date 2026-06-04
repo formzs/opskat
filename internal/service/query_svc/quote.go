@@ -7,28 +7,42 @@ import (
 )
 
 // QuoteIdent 对单个 SQL 标识符按 driver 加引号。
-// MySQL 用反引号,反引号转义为两个反引号。
-// PostgreSQL 用双引号,内部双引号转义为两个双引号。
+// MySQL 反引号；PostgreSQL/SQLite 双引号；MSSQL 方括号。
+// 标识符里同名转义字符按各方言规则成对转义。
 //
 // 行为与前端 frontend/src/lib/tableSql.ts:quoteIdent 等价,移到后端是为了
 // OpenTable 等服务端拼装 SQL 时复用,不再依赖前端传 SQL 字符串。
 func QuoteIdent(name string, driver asset_entity.DatabaseDriver) string {
-	if driver == asset_entity.DriverPostgreSQL {
+	switch driver {
+	case asset_entity.DriverPostgreSQL, asset_entity.DriverSQLite:
 		return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+	case asset_entity.DriverMSSQL:
+		return "[" + strings.ReplaceAll(name, "]", "]]") + "]"
+	default: // MySQL
+		return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 	}
-	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
 
 // QuoteTableRef 把 db + table 拼成限定表引用。
-// MySQL: `db`.`table`(database 是 MySQL 的库名)。
-// PostgreSQL: 忽略 database 参数(database 在前端模型里对应 PG 的"数据库连接");
-// table 既可以是裸表名(由 search_path 解析,通常落到 public),也可以是 "schema.table"
-// 形式——quoteQualified 会按点号拆分并分别加引号,行为与前端 quoteTableRef 一致。
+// MySQL: `db`.`table`。
+// PostgreSQL: 忽略 database 参数,table 可以是裸表名或 "schema.table" 形式。
+// SQLite: database 表示 schema（main/temp/ATTACH 名称）,有值时保留 schema 限定。
+// MSSQL: 与 PostgreSQL 一致,忽略 database 参数。连接已通过 DSN 的 database=
+// 限定了 catalog,所以这里按 schema.table 加方括号即可(裸表名 → [table]、
+// "dbo.users" → [dbo].[users])。不能拼成两段式 [db].[table]——T-SQL 会把它
+// 解释为 schema=db、object=table,导致 "Invalid object name"。
 func QuoteTableRef(database, table string, driver asset_entity.DatabaseDriver) string {
-	if driver == asset_entity.DriverPostgreSQL {
+	switch driver {
+	case asset_entity.DriverPostgreSQL, asset_entity.DriverMSSQL:
 		return quoteQualified(table, driver)
+	case asset_entity.DriverSQLite:
+		if database != "" {
+			return QuoteIdent(database, driver) + "." + QuoteIdent(table, driver)
+		}
+		return quoteQualified(table, driver)
+	default: // MySQL
+		return QuoteIdent(database, driver) + "." + QuoteIdent(table, driver)
 	}
-	return QuoteIdent(database, driver) + "." + QuoteIdent(table, driver)
 }
 
 // SQLQuote 把字符串包成 SQL 字符串字面量,只做单引号转义('  -> ”)。

@@ -58,6 +58,7 @@ import {
   Plus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import { BrowserOpenURL } from "../../../wailsjs/runtime/runtime";
 import { AIProviderForm, type AIProviderFormValues, type ReasoningEffort } from "@/components/ai/AIProviderForm";
 import { useAIStore } from "@/stores/aiStore";
@@ -108,7 +109,7 @@ function IntegrationSection() {
     setInstalling(true);
     try {
       await InstallOpsctl(installDir);
-      toast.success(t("integration.installSuccess"));
+      notifySuccess(t("integration.installSuccess"));
       await detect();
       toast.info(`${t("integration.pathHint")}: ${installDir}`);
     } catch (e: unknown) {
@@ -122,7 +123,7 @@ function IntegrationSection() {
     setSkillInstalling(true);
     try {
       await InstallSkills();
-      toast.success(t("integration.skillInstallSuccess"));
+      notifySuccess(t("integration.skillInstallSuccess"));
       await detect();
     } catch (e: unknown) {
       toast.error(errMsg(e));
@@ -420,7 +421,7 @@ export function AISettingsSection() {
           await SetActiveAIProvider(created.id);
         }
       }
-      toast.success(t("settings.saved"));
+      notifySuccess(t("settings.saved"));
       setDialogOpen(false);
       await loadProviders();
     } catch (e) {
@@ -434,7 +435,7 @@ export function AISettingsSection() {
     if (!deleteTarget) return;
     try {
       await DeleteAIProvider(deleteTarget.id);
-      toast.success(t("settings.saved"));
+      notifySuccess(t("settings.saved"));
       setDeleteTarget(null);
       await loadProviders();
     } catch (e) {

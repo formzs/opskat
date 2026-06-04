@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import { RefreshCw, Puzzle, Plus, MoreVertical, Info, Trash2, FolderOpen, FileArchive } from "lucide-react";
 import {
   Card,
@@ -88,7 +89,7 @@ export function ExtensionSection() {
     try {
       await ReloadExtensions();
       await loadExtensions();
-      toast.success(t("extension.reloadSuccess"));
+      notifySuccess(t("extension.reloadSuccess"));
     } catch (e) {
       toast.error(`${t("extension.reloadError")}: ${String(e)}`);
     } finally {
@@ -102,7 +103,7 @@ export function ExtensionSection() {
       const result = fromDir ? await InstallExtensionFromDirectory() : await InstallExtension();
       if (result) {
         await loadExtensions();
-        toast.success(t("extension.installSuccess"));
+        notifySuccess(t("extension.installSuccess"));
       }
     } catch (e) {
       toast.error(`${t("extension.installError")}: ${String(e)}`);
@@ -116,7 +117,7 @@ export function ExtensionSection() {
     try {
       await UninstallExtension(uninstallTarget.name, cleanData);
       await loadExtensions();
-      toast.success(t("extension.uninstallSuccess"));
+      notifySuccess(t("extension.uninstallSuccess"));
     } catch (e) {
       toast.error(String(e));
     } finally {
@@ -129,10 +130,10 @@ export function ExtensionSection() {
     try {
       if (ext.enabled) {
         await DisableExtension(ext.name);
-        toast.success(t("extension.disableSuccess"));
+        notifySuccess(t("extension.disableSuccess"));
       } else {
         await EnableExtension(ext.name);
-        toast.success(t("extension.enableSuccess"));
+        notifySuccess(t("extension.enableSuccess"));
       }
       await loadExtensions();
     } catch (e) {

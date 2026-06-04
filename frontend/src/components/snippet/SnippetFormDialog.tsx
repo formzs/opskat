@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import {
   Button,
   Dialog,
@@ -111,7 +112,7 @@ function SnippetFormDialogContent({
           content,
           description,
         } as unknown as import("../../../wailsjs/go/models").snippet_svc.CreateReq);
-        toast.success(t("snippet.toast.created"));
+        notifySuccess(t("snippet.toast.created"));
       } else if (initial) {
         await updateSnippet({
           id: initial.ID,
@@ -119,7 +120,7 @@ function SnippetFormDialogContent({
           content,
           description,
         } as unknown as import("../../../wailsjs/go/models").snippet_svc.UpdateReq);
-        toast.success(t("snippet.toast.updated"));
+        notifySuccess(t("snippet.toast.updated"));
       }
       onOpenChange(false);
     } catch (err) {

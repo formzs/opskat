@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import {
   Download,
   Shield,
@@ -105,7 +106,14 @@ export function ExportDialog({ open, onOpenChange, mode, onGistExport, onWebDAVE
       for (const key of Object.keys(shortcuts) as (keyof typeof DEFAULT_SHORTCUTS)[]) {
         const val = shortcuts[key];
         const def = DEFAULT_SHORTCUTS[key];
-        if (def && (val.code !== def.code || val.mod !== def.mod || val.shift !== def.shift || val.alt !== def.alt)) {
+        if (
+          def &&
+          (val.code !== def.code ||
+            val.mod !== def.mod ||
+            val.ctrl !== def.ctrl ||
+            val.shift !== def.shift ||
+            val.alt !== def.alt)
+        ) {
           custom[key] = val;
         }
       }
@@ -143,7 +151,7 @@ export function ExportDialog({ open, onOpenChange, mode, onGistExport, onWebDAVE
       } else {
         await ExportToFile(includeCredentials ? password : "", opts);
       }
-      toast.success(
+      notifySuccess(
         mode === "gist"
           ? t("backup.gistPushSuccess")
           : mode === "webdav"

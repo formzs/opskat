@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Loader2, PlugZap, XCircle } from "lucide-react";
 import {
@@ -24,10 +25,11 @@ import { GroupSelect } from "@/components/asset/GroupSelect";
 import { useAssetStore } from "@/stores/assetStore";
 import { asset_entity, credential_entity } from "../../../wailsjs/go/models";
 import { EncryptPassword } from "../../../wailsjs/go/system/System";
-import { GetAvailableAssetTypes, GetDecryptedExtensionConfig } from "../../../wailsjs/go/extension/Extension";
+import { GetDecryptedExtensionConfig } from "../../../wailsjs/go/extension/Extension";
 import { ListCredentialsByType, CancelTest } from "../../../wailsjs/go/system/System";
 import { ListLocalSSHKeys, TestSSHConnection } from "../../../wailsjs/go/ssh/SSH";
 import { TestDatabaseConnection, TestRedisConnection, TestMongoDBConnection } from "../../../wailsjs/go/query/Query";
+import { EtcdTestConfig } from "../../../wailsjs/go/etcd/Etcd";
 import { TestKafkaConnection } from "../../../wailsjs/go/kafka/Kafka";
 import { TestSerialConnection } from "../../../wailsjs/go/serial/Serial";
 import { ssh as ssh_models } from "../../../wailsjs/go/models";
@@ -42,9 +44,14 @@ import {
   type KafkaSchemaRegistryForm,
 } from "@/components/asset/KafkaConfigSection";
 import { K8sConfigSection } from "@/components/asset/K8sConfigSection";
+import { EtcdConfigSection } from "@/components/asset/EtcdConfigSection";
 import { SerialConfigSection } from "@/components/asset/SerialConfigSection";
+import { LocalConfigSection } from "@/components/asset/LocalConfigSection";
+import { formatLocalShellArgs, parseLocalShellArgs } from "@/lib/localShellArgs";
 import { useExtensionStore } from "@/extension";
 import { ExtensionConfigForm } from "@/components/asset/ExtensionConfigForm";
+import { AssetTypePicker } from "@/components/asset/AssetTypePicker";
+import { getAssetTypeOptions, getAssetTypeLabel } from "@/lib/assetTypes/options";
 
 interface AssetFormProps {
   open: boolean;
@@ -84,9 +91,9 @@ interface SSHConfig {
 
 interface DatabaseConfig {
   driver: string;
-  host: string;
-  port: number;
-  username: string;
+  host?: string;
+  port?: number;
+  username?: string;
   password?: string;
   credential_id?: number;
   database?: string;
@@ -95,6 +102,7 @@ interface DatabaseConfig {
   params?: string;
   read_only?: boolean;
   ssh_asset_id?: number;
+  path?: string;
 }
 
 interface RedisConfig {
@@ -113,6 +121,22 @@ interface RedisConfig {
   command_timeout_seconds?: number;
   scan_page_size?: number;
   key_separator?: string;
+  ssh_asset_id?: number;
+}
+
+interface EtcdConfig {
+  endpoints?: string[];
+  username?: string;
+  password?: string;
+  credential_id?: number;
+  tls?: boolean;
+  tls_insecure?: boolean;
+  tls_server_name?: string;
+  tls_ca_file?: string;
+  tls_cert_file?: string;
+  tls_key_file?: string;
+  dial_timeout_seconds?: number;
+  command_timeout_seconds?: number;
   ssh_asset_id?: number;
 }
 
@@ -184,27 +208,43 @@ interface KafkaConnectClusterConfig {
   tls_key_file?: string;
 }
 
-type AssetType = "ssh" | "database" | "redis" | "mongodb" | "kafka" | "k8s" | "serial" | (string & {});
+type AssetType =
+  | "ssh"
+  | "database"
+  | "redis"
+  | "mongodb"
+  | "kafka"
+  | "k8s"
+  | "serial"
+  | "etcd"
+  | "local"
+  | (string & {});
 
 const DEFAULT_PORTS: Record<string, number> = {
   ssh: 22,
   mysql: 3306,
   postgresql: 5432,
+  mssql: 1433,
   redis: 6379,
   mongodb: 27017,
   kafka: 9092,
   k8s: 6443,
+  etcd: 2379,
 };
 
 const DEFAULT_ICONS: Record<string, string> = {
   ssh: "server",
   mysql: "mysql",
   postgresql: "postgresql",
+  mssql: "database",
+  sqlite: "sqlite",
   redis: "redis",
   mongodb: "mongodb",
   kafka: "kafka",
   k8s: "kubernetes",
   serial: "usb",
+  etcd: "etcd",
+  local: "terminal",
 };
 
 function defaultKafkaCompanionAuth(): KafkaCompanionAuthForm {
@@ -282,16 +322,11 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
   const { t } = useTranslation();
   const { createAsset, updateAsset } = useAssetStore();
 
+  const extensions = useExtensionStore((s) => s.extensions);
+  const assetTypeOptions = useMemo(() => getAssetTypeOptions(extensions), [extensions]);
+
   // Asset type
   const [assetType, setAssetType] = useState<AssetType>("ssh");
-  const [availableTypes, setAvailableTypes] = useState<
-    { type: string; extensionName?: string; displayName: string; sshTunnel?: boolean }[]
-  >([]);
-
-  // Extension display name is already translated by the backend
-  const resolveExtDisplayName = useCallback((at: { displayName: string }) => {
-    return at.displayName;
-  }, []);
 
   // Basic fields
   const [name, setName] = useState("");
@@ -336,6 +371,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
 
   // Database fields
   const [driver, setDriver] = useState("mysql");
+  const [path, setPath] = useState("");
   const [database, setDatabase] = useState("");
   const [sslMode, setSslMode] = useState("disable");
   const [readOnly, setReadOnly] = useState(false);
@@ -352,6 +388,17 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
   const [redisTlsCAFile, setRedisTlsCAFile] = useState("");
   const [redisTlsCertFile, setRedisTlsCertFile] = useState("");
   const [redisTlsKeyFile, setRedisTlsKeyFile] = useState("");
+
+  // etcd fields
+  const [etcdEndpoints, setEtcdEndpoints] = useState("");
+  const [etcdTls, setEtcdTls] = useState(false);
+  const [etcdTlsInsecure, setEtcdTlsInsecure] = useState(false);
+  const [etcdTlsServerName, setEtcdTlsServerName] = useState("");
+  const [etcdTlsCAFile, setEtcdTlsCAFile] = useState("");
+  const [etcdTlsCertFile, setEtcdTlsCertFile] = useState("");
+  const [etcdTlsKeyFile, setEtcdTlsKeyFile] = useState("");
+  const [etcdDialTimeoutSeconds, setEtcdDialTimeoutSeconds] = useState(5);
+  const [etcdCommandTimeoutSeconds, setEtcdCommandTimeoutSeconds] = useState(10);
 
   // MongoDB fields
   const [mongoConnectionMode, setMongoConnectionMode] = useState<"manual" | "uri">("manual");
@@ -394,6 +441,11 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
   const [serialParity, setSerialParity] = useState("none");
   const [serialFlowControl, setSerialFlowControl] = useState("none");
 
+  // Local terminal fields
+  const [localShell, setLocalShell] = useState("");
+  const [localArgs, setLocalArgs] = useState("");
+  const [localCwd, setLocalCwd] = useState("~");
+
   // Extension config
   const [extConfig, setExtConfig] = useState<Record<string, unknown>>({});
 
@@ -425,9 +477,6 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
         .then((keys) => setLocalKeys(keys || []))
         .catch(() => setLocalKeys([]))
         .finally(() => setScanningKeys(false));
-      GetAvailableAssetTypes()
-        .then((types) => setAvailableTypes(types || []))
-        .catch(() => setAvailableTypes([]));
     }
   }, [open]);
 
@@ -455,6 +504,10 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
           loadK8sConfig(editAsset);
         } else if (editType === "serial") {
           loadSerialConfig(editAsset);
+        } else if (editType === "local") {
+          loadLocalConfig(editAsset);
+        } else if (editType === "etcd") {
+          loadEtcdConfig(editAsset);
         } else {
           // Extension type: load decrypted config
           const extInfo = useExtensionStore.getState().getExtensionForAssetType(editType);
@@ -480,6 +533,8 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
         resetKafkaFields();
         resetK8sFields();
         resetSerialFields();
+        resetLocalFields();
+        resetEtcdFields();
         setExtConfig({});
       }
     }
@@ -544,6 +599,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
       setPort(cfg.port || 3306);
       setUsername(cfg.username || "");
       setDriver(cfg.driver || "mysql");
+      setPath(cfg.path || "");
       setDatabase(cfg.database || "");
       setSslMode(cfg.ssl_mode || "disable");
       setTls(cfg.tls || false);
@@ -699,6 +755,38 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     }
   };
 
+  const loadEtcdConfig = (asset: asset_entity.Asset) => {
+    try {
+      const cfg: EtcdConfig = JSON.parse(asset.Config || "{}");
+      setEtcdEndpoints((cfg.endpoints || []).join("\n"));
+      setUsername(cfg.username || "");
+      setEtcdTls(cfg.tls || false);
+      setEtcdTlsInsecure(cfg.tls_insecure || false);
+      setEtcdTlsServerName(cfg.tls_server_name || "");
+      setEtcdTlsCAFile(cfg.tls_ca_file || "");
+      setEtcdTlsCertFile(cfg.tls_cert_file || "");
+      setEtcdTlsKeyFile(cfg.tls_key_file || "");
+      setEtcdDialTimeoutSeconds(cfg.dial_timeout_seconds || 5);
+      setEtcdCommandTimeoutSeconds(cfg.command_timeout_seconds || 10);
+      setSshTunnelId(asset.sshTunnelId || cfg.ssh_asset_id || 0);
+
+      if (cfg.credential_id) {
+        setPasswordSource("managed");
+        setPasswordCredentialId(cfg.credential_id);
+        setEncryptedPassword("");
+        setPassword("");
+      } else {
+        setPasswordSource("inline");
+        setPasswordCredentialId(0);
+        setEncryptedPassword(cfg.password || "");
+        setPassword("");
+      }
+    } catch {
+      resetSharedFields("etcd");
+      resetEtcdFields();
+    }
+  };
+
   // Reset shared connection fields with type-appropriate defaults
   const resetSharedFields = (type: AssetType, dbDriver = "mysql") => {
     setHost("");
@@ -735,6 +823,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
   // Database-exclusive fields only
   const resetDatabaseFields = () => {
     setDriver("mysql");
+    setPath("");
     setDatabase("");
     setSslMode("disable");
     setTls(false);
@@ -793,6 +882,19 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     setShowKubeconfig(false);
   };
 
+  // etcd-exclusive fields only
+  const resetEtcdFields = () => {
+    setEtcdEndpoints("");
+    setEtcdTls(false);
+    setEtcdTlsInsecure(false);
+    setEtcdTlsServerName("");
+    setEtcdTlsCAFile("");
+    setEtcdTlsCertFile("");
+    setEtcdTlsKeyFile("");
+    setEtcdDialTimeoutSeconds(5);
+    setEtcdCommandTimeoutSeconds(10);
+  };
+
   const loadSerialConfig = (asset: asset_entity.Asset) => {
     try {
       const cfg = JSON.parse(asset.Config || "{}");
@@ -816,6 +918,23 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     setSerialFlowControl("none");
   };
 
+  const loadLocalConfig = (asset: asset_entity.Asset) => {
+    try {
+      const cfg = JSON.parse(asset.Config || "{}");
+      setLocalShell(cfg.shell || "");
+      setLocalArgs(formatLocalShellArgs(cfg.args || []));
+      setLocalCwd(cfg.cwd || "~");
+    } catch {
+      resetLocalFields();
+    }
+  };
+
+  const resetLocalFields = () => {
+    setLocalShell("");
+    setLocalArgs("");
+    setLocalCwd("~");
+  };
+
   const handleTypeChange = (newType: AssetType) => {
     if (newType === assetType) return;
     setAssetType(newType);
@@ -831,14 +950,27 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     setIcon(newType === "database" ? DEFAULT_ICONS[driver] || "mysql" : DEFAULT_ICONS[newType] || "server");
     if (newType === "k8s") setHost("");
     if (newType === "serial") setHost("");
+    if (newType === "local") setHost("");
+    if (newType === "etcd") setHost("");
   };
 
   const handleDriverChange = (newDriver: string) => {
     setDriver(newDriver);
-    setPort(DEFAULT_PORTS[newDriver] || 3306);
-    setIcon(DEFAULT_ICONS[newDriver] || "mysql");
-    if (newDriver !== "postgresql") {
-      setSslMode("disable");
+    if (newDriver === "sqlite") {
+      setHost("");
+      setPort(0);
+      setUsername("");
+      setPassword("");
+      setEncryptedPassword("");
+      setSshTunnelId(0);
+      setIcon(DEFAULT_ICONS["sqlite"]);
+    } else {
+      setPort(DEFAULT_PORTS[newDriver] || 3306);
+      setIcon(DEFAULT_ICONS[newDriver] || "database");
+      setPath("");
+      if (newDriver !== "postgresql") {
+        setSslMode("disable");
+      }
     }
   };
 
@@ -921,7 +1053,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     setTesting(true);
     try {
       await TestSSHConnection(testId, JSON.stringify(sshConfig), password);
-      if (activeTestIdRef.current === testId) toast.success(t("asset.testConnectionSuccess"));
+      if (activeTestIdRef.current === testId) notifySuccess(t("asset.testConnectionSuccess"));
     } catch (e) {
       if (activeTestIdRef.current === testId) toast.error(`${t("asset.testConnectionFailed")}: ${String(e)}`);
     } finally {
@@ -933,20 +1065,27 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
   };
 
   const handleTestDatabaseConnection = async () => {
-    const cfg: DatabaseConfig = { driver, host, port, username };
+    const cfg: DatabaseConfig = { driver };
+    if (driver === "sqlite") {
+      cfg.path = path;
+    } else {
+      cfg.host = host;
+      cfg.port = port;
+      cfg.username = username;
+      if (sshTunnelId > 0) cfg.ssh_asset_id = sshTunnelId;
+      applyTestPasswordSource(cfg);
+    }
     if (database) cfg.database = database;
     if (driver === "postgresql" && sslMode !== "disable") cfg.ssl_mode = sslMode;
-    if (driver === "mysql" && tls) cfg.tls = true;
+    if ((driver === "mysql" || driver === "mssql") && tls) cfg.tls = true;
     if (readOnly) cfg.read_only = true;
-    if (sshTunnelId > 0) cfg.ssh_asset_id = sshTunnelId;
     if (params) cfg.params = params;
-    applyTestPasswordSource(cfg);
     const testId = newTestId();
     activeTestIdRef.current = testId;
     setTesting(true);
     try {
       await TestDatabaseConnection(testId, JSON.stringify(cfg), password);
-      if (activeTestIdRef.current === testId) toast.success(t("asset.testConnectionSuccess"));
+      if (activeTestIdRef.current === testId) notifySuccess(t("asset.testConnectionSuccess"));
     } catch (e) {
       if (activeTestIdRef.current === testId) toast.error(`${t("asset.testConnectionFailed")}: ${String(e)}`);
     } finally {
@@ -977,7 +1116,44 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     setTesting(true);
     try {
       await TestRedisConnection(testId, JSON.stringify(cfg), password);
-      if (activeTestIdRef.current === testId) toast.success(t("asset.testConnectionSuccess"));
+      if (activeTestIdRef.current === testId) notifySuccess(t("asset.testConnectionSuccess"));
+    } catch (e) {
+      if (activeTestIdRef.current === testId) toast.error(`${t("asset.testConnectionFailed")}: ${String(e)}`);
+    } finally {
+      if (activeTestIdRef.current === testId) {
+        activeTestIdRef.current = null;
+        setTesting(false);
+      }
+    }
+  };
+
+  const handleTestEtcdConnection = async () => {
+    const endpointsList = etcdEndpoints
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (endpointsList.length === 0) {
+      toast.error(t("etcd.error.endpointsRequired"));
+      return;
+    }
+    const cfg: EtcdConfig = { endpoints: endpointsList };
+    if (username) cfg.username = username;
+    if (etcdTls) cfg.tls = true;
+    if (etcdTls && etcdTlsInsecure) cfg.tls_insecure = true;
+    if (etcdTls && etcdTlsServerName) cfg.tls_server_name = etcdTlsServerName;
+    if (etcdTls && etcdTlsCAFile) cfg.tls_ca_file = etcdTlsCAFile;
+    if (etcdTls && etcdTlsCertFile) cfg.tls_cert_file = etcdTlsCertFile;
+    if (etcdTls && etcdTlsKeyFile) cfg.tls_key_file = etcdTlsKeyFile;
+    if (etcdDialTimeoutSeconds > 0) cfg.dial_timeout_seconds = etcdDialTimeoutSeconds;
+    if (etcdCommandTimeoutSeconds > 0) cfg.command_timeout_seconds = etcdCommandTimeoutSeconds;
+    if (sshTunnelId > 0) cfg.ssh_asset_id = sshTunnelId;
+    applyTestPasswordSource(cfg);
+    const testId = newTestId();
+    activeTestIdRef.current = testId;
+    setTesting(true);
+    try {
+      await EtcdTestConfig(testId, JSON.stringify(cfg), password);
+      if (activeTestIdRef.current === testId) notifySuccess(t("asset.testConnectionSuccess"));
     } catch (e) {
       if (activeTestIdRef.current === testId) toast.error(`${t("asset.testConnectionFailed")}: ${String(e)}`);
     } finally {
@@ -1008,7 +1184,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     setTesting(true);
     try {
       await TestMongoDBConnection(testId, JSON.stringify(cfg), password);
-      if (activeTestIdRef.current === testId) toast.success(t("asset.testConnectionSuccess"));
+      if (activeTestIdRef.current === testId) notifySuccess(t("asset.testConnectionSuccess"));
     } catch (e) {
       if (activeTestIdRef.current === testId) toast.error(`${t("asset.testConnectionFailed")}: ${String(e)}`);
     } finally {
@@ -1029,7 +1205,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     setTesting(true);
     try {
       await TestKafkaConnection(testId, JSON.stringify(cfg), password);
-      if (activeTestIdRef.current === testId) toast.success(t("asset.testConnectionSuccess"));
+      if (activeTestIdRef.current === testId) notifySuccess(t("asset.testConnectionSuccess"));
     } catch (e) {
       if (activeTestIdRef.current === testId) toast.error(`${t("asset.testConnectionFailed")}: ${String(e)}`);
     } finally {
@@ -1069,7 +1245,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     setTesting(true);
     try {
       await TestSerialConnection(testId, JSON.stringify(cfg));
-      if (activeTestIdRef.current === testId) toast.success(t("asset.testConnectionSuccess"));
+      if (activeTestIdRef.current === testId) notifySuccess(t("asset.testConnectionSuccess"));
     } catch (e) {
       if (activeTestIdRef.current === testId) toast.error(`${t("asset.testConnectionFailed")}: ${String(e)}`);
     } finally {
@@ -1261,22 +1437,25 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
       }
       config = JSON.stringify(sshConfig);
     } else if (assetType === "database") {
-      const dbConfig: DatabaseConfig = {
-        driver,
-        host,
-        port,
-        username,
-      };
-      if (passwordSource === "managed" && passwordCredentialId > 0) {
-        dbConfig.credential_id = passwordCredentialId;
+      const dbConfig: DatabaseConfig = { driver };
+      if (driver === "sqlite") {
+        dbConfig.path = path;
       } else {
-        const encrypted = await encryptPasswordValue();
-        if (encrypted === undefined) return;
-        if (encrypted) dbConfig.password = encrypted;
+        dbConfig.host = host;
+        dbConfig.port = port;
+        dbConfig.username = username;
+        if (passwordSource === "managed" && passwordCredentialId > 0) {
+          dbConfig.credential_id = passwordCredentialId;
+        } else {
+          const encrypted = await encryptPasswordValue();
+          if (encrypted === undefined) return;
+          if (encrypted) dbConfig.password = encrypted;
+        }
+        if (sshTunnelId > 0) dbConfig.ssh_asset_id = sshTunnelId;
+        if (driver === "postgresql" && sslMode !== "disable") dbConfig.ssl_mode = sslMode;
+        if ((driver === "mysql" || driver === "mssql") && tls) dbConfig.tls = true;
       }
       if (database) dbConfig.database = database;
-      if (driver === "postgresql" && sslMode !== "disable") dbConfig.ssl_mode = sslMode;
-      if (driver === "mysql" && tls) dbConfig.tls = true;
       if (readOnly) dbConfig.read_only = true;
       if (params) dbConfig.params = params;
       config = JSON.stringify(dbConfig);
@@ -1304,6 +1483,34 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
       if (redisScanPageSize > 0) redisConfig.scan_page_size = redisScanPageSize;
       if (redisKeySeparator && redisKeySeparator !== ":") redisConfig.key_separator = redisKeySeparator;
       config = JSON.stringify(redisConfig);
+    } else if (assetType === "etcd") {
+      const endpointsList = etcdEndpoints
+        .split(/[\n,;]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (endpointsList.length === 0) {
+        toast.error(t("etcd.error.endpointsRequired"));
+        return;
+      }
+      const etcdConfig: EtcdConfig = { endpoints: endpointsList };
+      if (username) etcdConfig.username = username;
+      if (passwordSource === "managed" && passwordCredentialId > 0) {
+        etcdConfig.credential_id = passwordCredentialId;
+      } else {
+        const encrypted = await encryptPasswordValue();
+        if (encrypted === undefined) return;
+        if (encrypted) etcdConfig.password = encrypted;
+      }
+      if (etcdTls) etcdConfig.tls = true;
+      if (etcdTls && etcdTlsInsecure) etcdConfig.tls_insecure = true;
+      if (etcdTls && etcdTlsServerName) etcdConfig.tls_server_name = etcdTlsServerName;
+      if (etcdTls && etcdTlsCAFile) etcdConfig.tls_ca_file = etcdTlsCAFile;
+      if (etcdTls && etcdTlsCertFile) etcdConfig.tls_cert_file = etcdTlsCertFile;
+      if (etcdTls && etcdTlsKeyFile) etcdConfig.tls_key_file = etcdTlsKeyFile;
+      if (etcdDialTimeoutSeconds > 0) etcdConfig.dial_timeout_seconds = etcdDialTimeoutSeconds;
+      if (etcdCommandTimeoutSeconds > 0) etcdConfig.command_timeout_seconds = etcdCommandTimeoutSeconds;
+      if (sshTunnelId > 0) etcdConfig.ssh_asset_id = sshTunnelId;
+      config = JSON.stringify(etcdConfig);
     } else if (assetType === "mongodb") {
       const mongoConfig: MongoDBConfig = {};
       if (mongoConnectionMode === "uri" && connectionURI) {
@@ -1380,6 +1587,19 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
       };
       if (serialFlowControl !== "none") serialConfig.flow_control = serialFlowControl;
       config = JSON.stringify(serialConfig);
+    } else if (assetType === "local") {
+      const localConfig: Record<string, unknown> = {};
+      if (localShell) localConfig.shell = localShell;
+      let argList: string[];
+      try {
+        argList = parseLocalShellArgs(localArgs);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Invalid shell args");
+        return;
+      }
+      if (argList.length) localConfig.args = argList;
+      if (localCwd) localConfig.cwd = localCwd;
+      config = JSON.stringify(localConfig);
     } else {
       // Extension type: encrypt password fields from configSchema before saving
       const extInfo = useExtensionStore.getState().getExtensionForAssetType(assetType);
@@ -1437,25 +1657,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     }
   };
 
-  const typeLabel =
-    assetType === "ssh"
-      ? t("asset.typeSSH")
-      : assetType === "database"
-        ? t("asset.typeDatabase")
-        : assetType === "redis"
-          ? t("asset.typeRedis")
-          : assetType === "mongodb"
-            ? t("asset.typeMongoDB")
-            : assetType === "kafka"
-              ? t("asset.typeKafka")
-              : assetType === "k8s"
-                ? t("asset.typeK8s")
-                : assetType === "serial"
-                  ? t("asset.typeSerial")
-                  : (() => {
-                      const found = availableTypes.find((at) => at.type === assetType);
-                      return found ? resolveExtDisplayName(found) : assetType;
-                    })();
+  const typeLabel = getAssetTypeLabel(assetType, t, assetTypeOptions);
 
   const isTestableAssetType =
     assetType === "ssh" ||
@@ -1463,7 +1665,14 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
     assetType === "redis" ||
     assetType === "mongodb" ||
     assetType === "kafka" ||
-    assetType === "serial";
+    assetType === "serial" ||
+    assetType === "etcd";
+
+  const etcdEndpointsList = () =>
+    etcdEndpoints
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
 
   const isTestConnectionDisabled =
     testing ||
@@ -1471,27 +1680,37 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
       ? kafkaBrokers().length === 0
       : assetType === "serial"
         ? !serialPortPath
-        : assetType !== "mongodb"
-          ? !host
-          : mongoConnectionMode === "uri"
-            ? !connectionURI
-            : !host);
+        : assetType === "database" && driver === "sqlite"
+          ? !path
+          : assetType === "etcd"
+            ? etcdEndpointsList().length === 0
+            : assetType !== "mongodb"
+              ? !host
+              : mongoConnectionMode === "uri"
+                ? !connectionURI
+                : !host);
 
   const saveDisabledReason = !name.trim()
     ? "asset.formMissingName"
-    : ["ssh", "database", "redis"].includes(assetType) && !host.trim()
-      ? "asset.formMissingHost"
-      : assetType === "mongodb" && mongoConnectionMode === "manual" && !host.trim()
+    : assetType === "database" && driver === "sqlite" && !path.trim()
+      ? "asset.formMissingPath"
+      : ["ssh", "redis"].includes(assetType) && !host.trim()
         ? "asset.formMissingHost"
-        : assetType === "mongodb" && mongoConnectionMode === "uri" && !connectionURI.trim()
-          ? "asset.formMissingMongoUri"
-          : assetType === "kafka" && kafkaBrokers().length === 0
-            ? "asset.formMissingKafkaBrokers"
-            : assetType === "k8s" && !kubeconfig.trim() && !editAsset
-              ? "asset.formMissingKubeconfig"
-              : assetType === "serial" && !serialPortPath.trim()
-                ? "asset.formMissingSerialPort"
-                : "";
+        : assetType === "database" && driver !== "sqlite" && !host.trim()
+          ? "asset.formMissingHost"
+          : assetType === "mongodb" && mongoConnectionMode === "manual" && !host.trim()
+            ? "asset.formMissingHost"
+            : assetType === "mongodb" && mongoConnectionMode === "uri" && !connectionURI.trim()
+              ? "asset.formMissingMongoUri"
+              : assetType === "kafka" && kafkaBrokers().length === 0
+                ? "asset.formMissingKafkaBrokers"
+                : assetType === "k8s" && !kubeconfig.trim() && !editAsset
+                  ? "asset.formMissingKubeconfig"
+                  : assetType === "serial" && !serialPortPath.trim()
+                    ? "asset.formMissingSerialPort"
+                    : assetType === "etcd" && etcdEndpointsList().length === 0
+                      ? "etcd.error.endpointsRequired"
+                      : "";
   const saveDisabled = saving || !!saveDisabledReason;
 
   const handleRunTestConnection =
@@ -1505,7 +1724,9 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
             ? handleTestKafkaConnection
             : assetType === "serial"
               ? handleTestSerialConnection
-              : handleTestRedisConnection;
+              : assetType === "etcd"
+                ? handleTestEtcdConnection
+                : handleTestRedisConnection;
 
   const testConnectionButton = !isTestableAssetType ? null : testing && activeTestIdRef.current ? (
     <Button type="button" variant="outline" size="sm" onClick={handleCancelTest} className="gap-1 w-fit">
@@ -1552,27 +1773,7 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
             {!editAsset && (
               <div className="grid gap-2">
                 <Label>{t("asset.type")}</Label>
-                <Select value={assetType} onValueChange={(v) => handleTypeChange(v as AssetType)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ssh">{t("asset.typeSSH")}</SelectItem>
-                    <SelectItem value="database">{t("asset.typeDatabase")}</SelectItem>
-                    <SelectItem value="redis">{t("asset.typeRedis")}</SelectItem>
-                    <SelectItem value="mongodb">{t("asset.typeMongoDB")}</SelectItem>
-                    <SelectItem value="kafka">{t("asset.typeKafka")}</SelectItem>
-                    <SelectItem value="k8s">{t("asset.typeK8s")}</SelectItem>
-                    <SelectItem value="serial">{t("asset.typeSerial")}</SelectItem>
-                    {availableTypes
-                      .filter((at) => !!at.extensionName)
-                      .map((at) => (
-                        <SelectItem key={at.type} value={at.type}>
-                          {resolveExtDisplayName(at)}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                <AssetTypePicker value={assetType} onChange={(v) => handleTypeChange(v as AssetType)} />
               </div>
             )}
 
@@ -1621,6 +1822,8 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
                   <SelectContent>
                     <SelectItem value="mysql">{t("asset.driverMySQL")}</SelectItem>
                     <SelectItem value="postgresql">{t("asset.driverPostgreSQL")}</SelectItem>
+                    <SelectItem value="mssql">{t("asset.driverMSSQL")}</SelectItem>
+                    <SelectItem value="sqlite">{t("asset.driverSQLite")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1698,6 +1901,8 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
                 setSshTunnelId={setSshTunnelId}
                 params={params}
                 setParams={setParams}
+                path={path}
+                setPath={setPath}
                 password={password}
                 setPassword={setPassword}
                 encryptedPassword={encryptedPassword}
@@ -1786,6 +1991,42 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
               />
             )}
 
+            {assetType === "etcd" && (
+              <EtcdConfigSection
+                endpoints={etcdEndpoints}
+                setEndpoints={setEtcdEndpoints}
+                username={username}
+                setUsername={setUsername}
+                password={password}
+                setPassword={setPassword}
+                encryptedPassword={encryptedPassword}
+                passwordSource={passwordSource}
+                setPasswordSource={setPasswordSource}
+                passwordCredentialId={passwordCredentialId}
+                setPasswordCredentialId={setPasswordCredentialId}
+                managedPasswords={managedPasswords}
+                editAssetId={editAsset?.ID}
+                tls={etcdTls}
+                setTls={setEtcdTls}
+                tlsInsecure={etcdTlsInsecure}
+                setTlsInsecure={setEtcdTlsInsecure}
+                tlsServerName={etcdTlsServerName}
+                setTlsServerName={setEtcdTlsServerName}
+                tlsCAFile={etcdTlsCAFile}
+                setTlsCAFile={setEtcdTlsCAFile}
+                tlsCertFile={etcdTlsCertFile}
+                setTlsCertFile={setEtcdTlsCertFile}
+                tlsKeyFile={etcdTlsKeyFile}
+                setTlsKeyFile={setEtcdTlsKeyFile}
+                dialTimeoutSeconds={etcdDialTimeoutSeconds}
+                setDialTimeoutSeconds={setEtcdDialTimeoutSeconds}
+                commandTimeoutSeconds={etcdCommandTimeoutSeconds}
+                setCommandTimeoutSeconds={setEtcdCommandTimeoutSeconds}
+                sshTunnelId={sshTunnelId}
+                setSshTunnelId={setSshTunnelId}
+              />
+            )}
+
             {assetType === "kafka" && (
               <KafkaConfigSection
                 brokersText={kafkaBrokersText}
@@ -1869,6 +2110,18 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
               />
             )}
 
+            {/* Local terminal config */}
+            {assetType === "local" && (
+              <LocalConfigSection
+                shell={localShell}
+                setShell={setLocalShell}
+                args={localArgs}
+                setArgs={setLocalArgs}
+                cwd={localCwd}
+                setCwd={setLocalCwd}
+              />
+            )}
+
             {/* Extension type config */}
             {assetType !== "ssh" &&
               assetType !== "database" &&
@@ -1877,6 +2130,8 @@ export function AssetForm({ open, onOpenChange, editAsset, defaultGroupId = 0 }:
               assetType !== "kafka" &&
               assetType !== "k8s" &&
               assetType !== "serial" &&
+              assetType !== "local" &&
+              assetType !== "etcd" &&
               (() => {
                 const extInfo = useExtensionStore.getState().getExtensionForAssetType(assetType);
                 if (!extInfo) return null;

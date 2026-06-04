@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import { Shield, Server, Network, Settings2, Keyboard, Palette, Loader2, Lock } from "lucide-react";
 import {
   Dialog,
@@ -118,7 +119,7 @@ export function BackupImportDialog({
       if (result.credentials_imported > 0) parts.push(`${result.credentials_imported} credentials`);
       if (result.policy_groups_imported > 0) parts.push(`${result.policy_groups_imported} policy groups`);
       if (result.forwards_imported > 0) parts.push(`${result.forwards_imported} forwards`);
-      toast.success(t("backup.importSuccess") + (parts.length > 0 ? `: ${parts.join(", ")}` : ""));
+      notifySuccess(t("backup.importSuccess") + (parts.length > 0 ? `: ${parts.join(", ")}` : ""));
 
       onOpenChange(false);
     } catch (e) {

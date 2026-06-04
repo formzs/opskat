@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -90,12 +91,17 @@ type Session struct {
 
 	syncEnableMu       sync.Mutex
 	syncMu             sync.Mutex
+	outputFilterMu     sync.Mutex
 	syncState          DirectorySyncState
 	pendingDirChange   chan error
 	pendingDirNonce    string
 	pendingDirTarget   string
 	pendingDirExpected string
 	parserRemainder    []byte
+	echoSuppressions   [][]byte
+	echoSuppressionIdx int
+	internalScriptEcho bool
+	internalEchoDropLn bool
 	syncToken          string
 	promptNonce        string
 	promptPendingNonce string
@@ -103,6 +109,7 @@ type Session struct {
 	syncDirty          bool
 	syncBootstrapCh    chan struct{} // closed when EnableSync receives init:pid; nil when not bootstrapping
 	syncProbeActive    bool
+	internalScriptSeq  int
 	probeShellStateFn  func(int) (shellProbeResult, error)
 }
 
@@ -164,12 +171,63 @@ func (s *Session) IsClosed() bool {
 }
 
 func (s *Session) writeInternal(data []byte) error {
+	pattern := s.queueInternalEchoSuppression(data)
+
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
+	closed := s.closed
+	var err error
+	if !closed {
+		_, err = s.stdin.Write(data)
+	}
+	s.mu.Unlock()
+
+	if closed {
+		s.removeQueuedEchoSuppression(pattern)
 		return fmt.Errorf("session is closed")
 	}
-	_, err := s.stdin.Write(data)
+	if err != nil {
+		// 部分写入也要清掉队列项：截断的远端回显匹配不到完整 pattern，
+		// 留在队列里会误吞后续无关输出。
+		s.removeQueuedEchoSuppression(pattern)
+	}
+	return err
+}
+
+func (s *Session) nextInternalScriptPath() string {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+	s.internalScriptSeq++
+	return fmt.Sprintf("/tmp/.opskat-sync-%d-%d.sh", time.Now().UnixNano(), s.internalScriptSeq)
+}
+
+func (s *Session) writeInternalScript(script string) error {
+	if script == "" {
+		return fmt.Errorf("internal script is empty")
+	}
+	return s.writeInternalTempScript(s.nextInternalScriptPath(), script)
+}
+
+func (s *Session) writeInternalTempScript(tempPath string, script string) error {
+	command := buildSourceTempScriptCommand(tempPath, script)
+	s.beginInternalScriptEchoSuppression()
+
+	s.mu.Lock()
+	closed := s.closed
+	var err error
+	if !closed {
+		_, err = s.stdin.Write([]byte(command))
+	}
+	s.mu.Unlock()
+
+	if closed {
+		s.endInternalScriptEchoSuppression()
+		return fmt.Errorf("session is closed")
+	}
+	if err != nil {
+		// 同 writeInternal：写失败（含部分写入）都要关掉脚本回显抑制，
+		// 否则后续输出会被持续吞掉。
+		s.endInternalScriptEchoSuppression()
+	}
 	return err
 }
 
@@ -748,6 +806,29 @@ func (m *Manager) GetSession(id string) (*Session, bool) {
 		return nil, false
 	}
 	return v.(*Session), true
+}
+
+// ListActiveSessionIDsByAsset 返回指定资产当前仍处于活跃态的 SSH 会话 ID。
+// external edit 只允许在“同一资产且候选唯一”时做受限重绑，因此这里刻意只暴露最小会话列表，
+// 不把终端层的更多运行态细节泄漏到上层业务。
+func (m *Manager) ListActiveSessionIDsByAsset(assetID int64) []string {
+	if assetID <= 0 {
+		return nil
+	}
+
+	ids := make([]string, 0, 4)
+	m.sessions.Range(func(key, value any) bool {
+		sess, ok := value.(*Session)
+		if !ok || sess == nil || sess.AssetID != assetID || sess.IsClosed() {
+			return true
+		}
+		if id, ok := key.(string); ok && id != "" {
+			ids = append(ids, id)
+		}
+		return true
+	})
+	sort.Strings(ids)
+	return ids
 }
 
 // GetSessionSyncState 获取会话目录同步状态。

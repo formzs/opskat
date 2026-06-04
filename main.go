@@ -10,9 +10,12 @@ import (
 	"time"
 
 	"github.com/opskat/opskat/internal/app/ai"
+	"github.com/opskat/opskat/internal/app/etcd"
 	"github.com/opskat/opskat/internal/app/extension"
+	"github.com/opskat/opskat/internal/app/external_edit"
 	"github.com/opskat/opskat/internal/app/k8s"
 	"github.com/opskat/opskat/internal/app/kafka"
+	"github.com/opskat/opskat/internal/app/local"
 	"github.com/opskat/opskat/internal/app/opsctl"
 	"github.com/opskat/opskat/internal/app/query"
 	"github.com/opskat/opskat/internal/app/redis"
@@ -28,6 +31,8 @@ import (
 	"github.com/opskat/opskat/internal/repository/extension_data_repo"
 	"github.com/opskat/opskat/internal/repository/extension_state_repo"
 	"github.com/opskat/opskat/internal/service/extension_svc"
+	"github.com/opskat/opskat/internal/service/external_edit_svc"
+	"github.com/opskat/opskat/internal/service/localterm_svc"
 	"github.com/opskat/opskat/internal/service/serial_svc"
 	"github.com/opskat/opskat/internal/service/sftp_svc"
 	"github.com/opskat/opskat/internal/service/snippet_svc"
@@ -92,7 +97,13 @@ func main() {
 	// 1. 共享基础设施
 	sshMgr := ssh_svc.NewManager()
 	sftpSvc := sftp_svc.NewService(sshMgr)
+	// external edit 复用 sftp 通道读写远程文件，由 service 层把"全文读取阈值"
+	// 通过 provider 反向注入给 sftp_svc：超过阈值的远程文件由 sftp 主动截断报错。
+	sftpSvc.SetMaxReadFileSizeProvider(func() int64 {
+		return external_edit_svc.MaxReadFileSizeBytesForConfig(bootstrap.GetConfig())
+	})
 	serialMgr := serial_svc.NewManager()
+	localMgr := localterm_svc.NewManager()
 	poolDialer := &sshadapt.PoolDialer{}
 	pool := sshpool.NewPool(poolDialer, 5*time.Minute)
 	proxyServer := sshpool.NewServer(pool, authToken)
@@ -111,20 +122,23 @@ func main() {
 	sshB := ssh.New(appCtx, sys, sshMgr, sftpSvc, pool)
 	queryB := query.New(appCtx, sys, pool)
 	redisB := redis.New(appCtx, sys, pool)
+	etcdB := etcd.New(appCtx, sys, pool)
 	kafkaB := kafka.New(appCtx, sys, pool)
 	k8sB := k8s.New(appCtx, sys, pool)
 	serialB := serial.New(appCtx, sys, serialMgr)
+	localB := local.New(appCtx, sys, localMgr)
 	aiB := ai.New(appCtx, sys, pool)
 	opsctlB := opsctl.New(appCtx, sys, sys, proxyServer)
 	opsctlB.SetAuthToken(authToken)
 	extB := extension.New(appCtx, sys, pool)
+	extEditB := external_edit.New(appCtx, sys, sftpSvc, sshMgr)
 
 	// 3. 注入跨 binder 依赖
 	aiB.SetKafkaService(kafkaB.Service())
 	aiB.SetSerialManager(serialMgr)
 	aiB.SetWindowActivator(sys)
 
-	binders := []Lifecycle{sys, sshB, queryB, redisB, kafkaB, k8sB, serialB, aiB, opsctlB, extB}
+	binders := []Lifecycle{sys, sshB, queryB, redisB, etcdB, kafkaB, k8sB, serialB, localB, aiB, opsctlB, extB, extEditB}
 
 	err = wails.Run(&options.App{
 		Title:     "OpsKat",
@@ -165,7 +179,7 @@ func main() {
 			pool.Close()
 		},
 		Bind: []interface{}{
-			sys, sshB, queryB, redisB, kafkaB, k8sB, serialB, aiB, opsctlB, extB,
+			sys, sshB, queryB, redisB, etcdB, kafkaB, k8sB, serialB, localB, aiB, opsctlB, extB, extEditB,
 		},
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: "com.opskat.desktop",

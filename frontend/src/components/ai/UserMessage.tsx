@@ -2,6 +2,7 @@ import { memo, useCallback } from "react";
 import { Copy, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { notifyCopied } from "@/lib/notify";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@opskat/ui";
 import type { ChatMessage } from "@/stores/aiStore";
 import { useCompact } from "@/components/ai/AIChatContentContext";
@@ -16,9 +17,9 @@ async function copyUserMessageText(text: string, copiedText: string, failedText:
   if (!text.trim()) return;
   try {
     await navigator.clipboard.writeText(text);
-    toast.success(copiedText, { duration: 1500, position: "top-center" });
+    notifyCopied(copiedText);
   } catch {
-    toast.error(failedText, { duration: 2000, position: "top-center" });
+    toast.error(failedText);
   }
 }
 

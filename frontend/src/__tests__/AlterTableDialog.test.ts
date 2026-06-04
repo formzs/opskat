@@ -89,4 +89,131 @@ describe("buildAlterStatements", () => {
       'COMMENT ON COLUMN "users_v2"."age" IS \'age in years\'',
     ]);
   });
+
+  it("builds only SQLite-supported ALTER TABLE statements", () => {
+    const result = buildAlterStatements({
+      driver: "sqlite",
+      database: "main",
+      table: "users",
+      tableNameDraft: "users_v2",
+      tableCommentDraft: "ignored",
+      originalTableComment: "",
+      originalColumns: [
+        { name: "id", type: "INTEGER", nullable: false, defaultValue: "", comment: "" },
+        { name: "name", type: "TEXT", nullable: true, defaultValue: "", comment: "" },
+      ],
+      draftColumns: [
+        {
+          id: 1,
+          originalName: "id",
+          name: "id",
+          type: "BIGINT",
+          nullable: false,
+          defaultValue: "",
+          comment: "ignored",
+          isNew: false,
+        },
+        {
+          id: 2,
+          originalName: "name",
+          name: "full_name",
+          type: "TEXT",
+          nullable: true,
+          defaultValue: "",
+          comment: "",
+          isNew: false,
+        },
+        {
+          id: 3,
+          name: "age",
+          type: "INTEGER",
+          nullable: true,
+          defaultValue: "",
+          comment: "",
+          isNew: true,
+        },
+      ],
+    });
+
+    expect(result.nextTableName).toBe("users_v2");
+    expect(result.statements).toEqual([
+      'ALTER TABLE "main"."users" RENAME TO "users_v2"',
+      'ALTER TABLE "main"."users_v2" ADD COLUMN "age" INTEGER',
+      'ALTER TABLE "main"."users_v2" RENAME COLUMN "name" TO "full_name"',
+    ]);
+  });
+
+  it("builds MSSQL alter statements with sp_rename / ALTER COLUMN and bracket quoting", () => {
+    const result = buildAlterStatements({
+      driver: "mssql",
+      database: "appdb",
+      table: "users",
+      tableNameDraft: "users_v2",
+      tableCommentDraft: "user table", // MSSQL 用扩展属性，UI 已锁定，不生成
+      originalTableComment: "",
+      originalColumns: [
+        { name: "id", type: "INT", nullable: false, defaultValue: "", comment: "" },
+        { name: "name", type: "VARCHAR(100)", nullable: true, defaultValue: "", comment: "old name" },
+      ],
+      draftColumns: [
+        {
+          id: 1,
+          originalName: "id",
+          name: "id",
+          type: "BIGINT",
+          nullable: false,
+          defaultValue: "",
+          comment: "id column",
+          isNew: false,
+        },
+        {
+          id: 3,
+          name: "email",
+          type: "VARCHAR(255)",
+          nullable: false,
+          defaultValue: "",
+          comment: "email column",
+          isNew: true,
+        },
+      ],
+    });
+
+    expect(result.nextTableName).toBe("users_v2");
+    expect(result.statements).toEqual([
+      "EXEC sp_rename 'users', 'users_v2'",
+      "ALTER TABLE [users_v2] ADD [email] VARCHAR(255) NOT NULL",
+      "ALTER TABLE [users_v2] ALTER COLUMN [id] BIGINT NOT NULL",
+      "ALTER TABLE [users_v2] DROP COLUMN [name]",
+    ]);
+  });
+
+  it("renames MSSQL columns with sp_rename then alters them by the new name", () => {
+    const result = buildAlterStatements({
+      driver: "mssql",
+      database: "appdb",
+      table: "users",
+      tableNameDraft: "users",
+      tableCommentDraft: "",
+      originalTableComment: "",
+      originalColumns: [{ name: "full_name", type: "NVARCHAR(200)", nullable: true, defaultValue: "", comment: "" }],
+      draftColumns: [
+        {
+          id: 1,
+          originalName: "full_name",
+          name: "display_name",
+          type: "NVARCHAR(200)",
+          nullable: false,
+          defaultValue: "",
+          comment: "",
+          isNew: false,
+        },
+      ],
+    });
+
+    expect(result.nextTableName).toBeUndefined();
+    expect(result.statements).toEqual([
+      "EXEC sp_rename 'users.full_name', 'display_name', 'COLUMN'",
+      "ALTER TABLE [users] ALTER COLUMN [display_name] NVARCHAR(200) NOT NULL",
+    ]);
+  });
 });

@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
   Button,
 } from "@opskat/ui";
-import { toast } from "sonner";
+import { notifyCopied } from "@/lib/notify";
 import { CodeEditor } from "@/components/CodeEditor";
 
 interface SqlPreviewDialogProps {
@@ -42,7 +42,7 @@ export function SqlPreviewDialog({
     const text = statements.join("\n\n");
     if (!text) return;
     await navigator.clipboard.writeText(text);
-    toast.success(t("query.copied"));
+    notifyCopied(t("query.copied"));
   };
 
   return (

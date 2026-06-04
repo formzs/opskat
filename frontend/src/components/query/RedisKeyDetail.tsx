@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Key, Loader2, Send, ChevronRight, Trash2, X, RefreshCw, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { notifyCopied } from "@/lib/notify";
 import { Button, Input, ConfirmDialog } from "@opskat/ui";
 import { useQueryStore } from "@/stores/queryStore";
 import { useTabStore, type QueryTabMeta } from "@/stores/tabStore";
@@ -160,7 +161,7 @@ export function RedisKeyDetail({ tabId }: RedisKeyDetailProps) {
   const handleCopyKeyName = useCallback(() => {
     if (state?.selectedKey) {
       navigator.clipboard.writeText(state.selectedKey);
-      toast.success(t("query.copied"));
+      notifyCopied(t("query.copied"));
     }
   }, [state?.selectedKey, t]);
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { notifyCopied, notifySuccess } from "@/lib/notify";
 import { useTranslation } from "react-i18next";
 import { Plus, Trash2, Copy, Key, FileKey, Download, Pencil, Lock, KeyRound, Eye, EyeOff, Shuffle } from "lucide-react";
 import {
@@ -83,7 +84,7 @@ export function CredentialManager() {
     if (!deleteCred) return;
     try {
       await DeleteCredential(deleteCred.id);
-      toast.success(deleteCred.type === "ssh_key" ? t("sshKey.deleteSuccess") : t("credential.deleteSuccess"));
+      notifySuccess(deleteCred.type === "ssh_key" ? t("sshKey.deleteSuccess") : t("credential.deleteSuccess"));
       setDeleteCred(null);
       fetchCredentials();
     } catch (e) {
@@ -95,7 +96,7 @@ export function CredentialManager() {
     try {
       const pubKey = await GetCredentialPublicKey(id);
       await navigator.clipboard.writeText(pubKey);
-      toast.success(t("sshKey.copied"));
+      notifyCopied(t("sshKey.copied"));
     } catch (e) {
       toast.error(String(e));
     }
@@ -332,7 +333,7 @@ function GenerateKeyDialog({
     setSaving(true);
     try {
       await GenerateSSHKey(name, comment, keyType, keySize, passphrase, username);
-      toast.success(t("sshKey.generateSuccess"));
+      notifySuccess(t("sshKey.generateSuccess"));
       onOpenChange(false);
       onSuccess();
     } catch (e) {
@@ -474,7 +475,7 @@ function ImportKeyDialog({
     try {
       const result = await ImportSSHKeyFile(name, comment, passphrase, username);
       if (result) {
-        toast.success(t("sshKey.importSuccess"));
+        notifySuccess(t("sshKey.importSuccess"));
         onOpenChange(false);
         onSuccess();
       }
@@ -489,7 +490,7 @@ function ImportKeyDialog({
     setSaving(true);
     try {
       await ImportSSHKeyPEM(name, comment, pemContent, passphrase, username);
-      toast.success(t("sshKey.importSuccess"));
+      notifySuccess(t("sshKey.importSuccess"));
       onOpenChange(false);
       onSuccess();
     } catch (e) {
@@ -605,7 +606,7 @@ function CreatePasswordDialog({
     setSaving(true);
     try {
       await CreatePasswordCredential(name, username, password, description);
-      toast.success(t("credential.createSuccess"));
+      notifySuccess(t("credential.createSuccess"));
       onOpenChange(false);
       onSuccess();
     } catch (e) {
@@ -728,7 +729,7 @@ function EditCredentialDialog({
     setSaving(true);
     try {
       await UpdateCredential(credential.id, name, comment, description, username);
-      toast.success(credential.type === "ssh_key" ? t("sshKey.updateSuccess") : t("credential.updateSuccess"));
+      notifySuccess(credential.type === "ssh_key" ? t("sshKey.updateSuccess") : t("credential.updateSuccess"));
       onOpenChange(false);
       onSuccess();
     } catch (e) {
@@ -836,7 +837,7 @@ function ChangePasswordDialog({
     setSaving(true);
     try {
       await UpdateCredentialPassword(credential.id, password);
-      toast.success(t("credential.passwordChanged"));
+      notifySuccess(t("credential.passwordChanged"));
       onOpenChange(false);
       onSuccess();
     } catch (e) {
@@ -943,7 +944,7 @@ function ChangePassphraseDialog({
     setSaving(true);
     try {
       await UpdateCredentialPassphrase(credential.id, oldPassphrase, newPassphrase);
-      toast.success(t("sshKey.passphraseChanged"));
+      notifySuccess(t("sshKey.passphraseChanged"));
       onOpenChange(false);
       onSuccess();
     } catch (e) {

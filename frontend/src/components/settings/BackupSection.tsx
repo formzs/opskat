@@ -64,6 +64,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { notifyCopied, notifySuccess } from "@/lib/notify";
 import { BrowserOpenURL } from "../../../wailsjs/runtime/runtime";
 import { useShortcutStore } from "@/stores/shortcutStore";
 import { useTerminalThemeStore } from "@/stores/terminalThemeStore";
@@ -306,7 +307,7 @@ export function BackupSection() {
       const user = await GetGitHubUser(token);
       setGhUser(user.login);
       await SaveGitHubToken(token, user.login);
-      toast.success(t("backup.gistLoggedIn", { user: user.login }));
+      notifySuccess(t("backup.gistLoggedIn", { user: user.login }));
     } catch (e: unknown) {
       if (!String(e).includes("\u53D6\u6D88")) {
         toast.error(errMsg(e));
@@ -380,7 +381,7 @@ export function BackupSection() {
       });
       const result = await ImportFromGist(selectedGistId, gistPullPassword, ghToken, opts);
       await applyImportResult(result);
-      toast.success(t("backup.gistPullSuccess"));
+      notifySuccess(t("backup.gistPullSuccess"));
     } catch (e: unknown) {
       toast.error(errMsg(e));
     } finally {
@@ -406,7 +407,7 @@ export function BackupSection() {
     try {
       await SaveWebDAVConfig(buildWebDAVInput());
       setWebDAVConfigured(true);
-      toast.success(t("backup.webdavSaved"));
+      notifySuccess(t("backup.webdavSaved"));
     } catch (e: unknown) {
       toast.error(errMsg(e));
     } finally {
@@ -422,7 +423,7 @@ export function BackupSection() {
     setWebDAVTesting(true);
     try {
       await TestWebDAVConfig(buildWebDAVInput());
-      toast.success(t("backup.webdavTestSuccess"));
+      notifySuccess(t("backup.webdavTestSuccess"));
     } catch (e: unknown) {
       toast.error(errMsg(e));
     } finally {
@@ -441,7 +442,7 @@ export function BackupSection() {
       setWebDAVToken("");
       setWebDAVBackups([]);
       setSelectedWebDAVBackup("");
-      toast.success(t("backup.webdavCleared"));
+      notifySuccess(t("backup.webdavCleared"));
     } catch (e: unknown) {
       toast.error(errMsg(e));
     }
@@ -500,7 +501,7 @@ export function BackupSection() {
       });
       const result = await ImportFromWebDAV(selectedWebDAVBackup, webdavPullPassword, opts);
       await applyImportResult(result);
-      toast.success(t("backup.webdavPullSuccess"));
+      notifySuccess(t("backup.webdavPullSuccess"));
     } catch (e: unknown) {
       toast.error(errMsg(e));
     } finally {
@@ -744,7 +745,7 @@ export function BackupSection() {
                   size="icon"
                   onClick={() => {
                     navigator.clipboard.writeText(deviceFlowInfo.userCode);
-                    toast.success("Copied");
+                    notifyCopied(t("action.copied"));
                   }}
                 >
                   <Copy className="h-4 w-4" />

@@ -40,6 +40,7 @@ import {
 } from "../../../wailsjs/go/system/System";
 import { Bug, Download, FolderOpen, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import { BrowserOpenURL, EventsOn } from "../../../wailsjs/runtime/runtime";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -95,7 +96,7 @@ export function UpdateSection() {
     setDebugModeState(enabled);
     try {
       await SetDebugMode(enabled);
-      toast.success(enabled ? t("appUpdate.debugModeOn") : t("appUpdate.debugModeOff"));
+      notifySuccess(enabled ? t("appUpdate.debugModeOn") : t("appUpdate.debugModeOff"));
     } catch (e: unknown) {
       setDebugModeState(!enabled);
       toast.error(errMsg(e));
@@ -181,7 +182,7 @@ export function UpdateSection() {
       const info = await CheckForUpdate();
       setUpdateInfo(info);
       if (!info.hasUpdate) {
-        toast.success(t("appUpdate.latestVersion"));
+        notifySuccess(t("appUpdate.latestVersion"));
       }
     } catch (e: unknown) {
       toast.error(`${t("appUpdate.checkFailed")}: ${errMsg(e)}`);
@@ -196,7 +197,7 @@ export function UpdateSection() {
     try {
       await DownloadAndInstallUpdate(skipChecksum);
       setUpdateDone(true);
-      toast.success(t("appUpdate.updateSuccess"));
+      notifySuccess(t("appUpdate.updateSuccess"));
     } catch (e: unknown) {
       const msg = errMsg(e);
       if (msg.startsWith("CHECKSUM_FETCH_FAILED:")) {

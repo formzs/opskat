@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { ConnectSSHAsync } from "../../wailsjs/go/ssh/SSH";
+import { ConnectSSHAsync, SplitSSH } from "../../wailsjs/go/ssh/SSH";
 import { DisconnectSSH, GetSSHSyncState } from "../../wailsjs/go/ssh/SSH";
+import { SplitLocal } from "../../wailsjs/go/local/Local";
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
 import { useTabStore } from "../stores/tabStore";
 import {
@@ -288,6 +289,70 @@ describe("terminalStore.connect", () => {
 
     resolveConnect!("conn-5");
     await promise;
+  });
+});
+
+describe("terminalStore.splitPane", () => {
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  function seedTab(tabId: string, sessionId: string, transport: "ssh" | "local" | "serial") {
+    useTerminalStore.setState({
+      tabData: {
+        [tabId]: {
+          splitTree: { type: "terminal", sessionId },
+          activePaneId: sessionId,
+          panes: { [sessionId]: { sessionId, transport, connected: true, connectedAt: 1 } },
+          directoryFollowMode: "off",
+        },
+      },
+    });
+  }
+
+  beforeEach(() => {
+    __resetTerminalSyncListenersForTest();
+    vi.clearAllMocks();
+    useTabStore.setState({ tabs: [], activeTabId: null });
+    useTerminalStore.setState({ tabData: {}, sessionSync: {}, connections: {}, connectingAssetIds: new Set() });
+    vi.mocked(GetSSHSyncState).mockResolvedValue(makeSyncState());
+  });
+
+  it("splits a local terminal by spawning a new local session via SplitLocal", async () => {
+    seedTab("tabL", "local-1", "local");
+    vi.mocked(SplitLocal).mockResolvedValueOnce("local-2");
+
+    useTerminalStore.getState().splitPane("tabL", "vertical");
+    await flush();
+
+    expect(SplitLocal).toHaveBeenCalledWith("local-1", 80, 24);
+    expect(SplitSSH).not.toHaveBeenCalled();
+
+    const data = useTerminalStore.getState().tabData.tabL;
+    expect(data.splitTree.type).toBe("split");
+    expect(data.panes["local-2"]).toMatchObject({ transport: "local", connected: true });
+    expect(data.activePaneId).toBe("local-2");
+  });
+
+  it("does not register an ssh sync listener for a local split", async () => {
+    seedTab("tabL", "local-1", "local");
+    vi.mocked(SplitLocal).mockResolvedValueOnce("local-2");
+
+    useTerminalStore.getState().splitPane("tabL", "horizontal");
+    await flush();
+
+    expect(GetSSHSyncState).not.toHaveBeenCalledWith("local-2");
+    expect(EventsOn).not.toHaveBeenCalledWith("ssh:sync:local-2", expect.any(Function));
+  });
+
+  it("splits an ssh terminal via SplitSSH (unchanged)", async () => {
+    seedTab("tabS", "s1", "ssh");
+    vi.mocked(SplitSSH).mockResolvedValueOnce("s2");
+
+    useTerminalStore.getState().splitPane("tabS", "vertical");
+    await flush();
+
+    expect(SplitSSH).toHaveBeenCalledWith("s1", 80, 24);
+    expect(SplitLocal).not.toHaveBeenCalled();
+    expect(useTerminalStore.getState().tabData.tabS.panes["s2"]).toMatchObject({ transport: "ssh" });
   });
 });
 

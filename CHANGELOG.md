@@ -1,3 +1,32 @@
+<a name="1.7.0"></a>
+
+## 1.7.0 (2026-05-30)
+
+本次版本新增 etcd 资产管理、SQL Server / SQLite 数据库资产，以及远程文件 external edit 全链路（含三方 merge 工作台）三大功能；SFTP 文件管理器大幅增强；优化资产树拖拽性能；并修复启动首页偏好、终端 PTY 尺寸、命令面板溢出、WebGL 字体渲染等问题。
+
+### 🚀 主要新功能
+
+- 💥 接入 etcd 资产管理：新增 etcd 资产类型、连接池与内置权限策略，支持 KV 浏览/查询/详情编辑与集群信息，接入 AI 工具链 [#122](https://github.com/opskat/opskat/issues/122) ([#129](https://github.com/opskat/opskat/pull/129)) (by @CodFrm)
+- 💥 新增 SQL Server 与 SQLite 数据库资产：MSSQL 纯 Go 驱动支持直连 + SSH 隧道，SQLite 本地文件直连，查询面板方言/分页/只读拦截完整适配 [#120](https://github.com/opskat/opskat/issues/120) ([#128](https://github.com/opskat/opskat/pull/128)) (by @CodFrm)
+- 💥 新增远程文件 external edit 全链路：远端文件拉起为本地副本持续编辑、自动回写，含三方 merge 工作台、pending 决策收口与重启恢复 ([#112](https://github.com/opskat/opskat/pull/112)) (by @2849236173)
+- ✨ SFTP 文件管理器增强：新建文件/文件夹、重命名、剪切/复制/粘贴、多选下载/删除、拖拽移动、属性弹窗与权限/属主编辑（chmod/chown，可递归） ([#124](https://github.com/opskat/opskat/pull/124)) (by @youaremywind)
+- ✨ SFTP 文件管理新增"复制文件路径"菜单项 ([#131](https://github.com/opskat/opskat/pull/131)) (by @youaremywind)
+
+### ⚡️ 性能优化
+
+- ⚡️ 优化资产树拖拽性能与单击响应延迟（拖动时 AssetRow 重渲染从 ~34/move 降到 ~0.68/move） (by @CodFrm)
+
+### 🐛 Bug 修复
+
+- 🐛 修复启动首页偏好失效 [#132](https://github.com/opskat/opskat/issues/132) ([#133](https://github.com/opskat/opskat/pull/133)) (by @CodFrm)
+- 🐛 修复 SSH 终端初次挂载未同步 PTY 尺寸导致 vi 等全屏程序只显示一半 [#125](https://github.com/opskat/opskat/issues/125) (by @CodFrm)
+- 🐛 修复命令面板内容过多时溢出弹层 [#126](https://github.com/opskat/opskat/issues/126) (by @CodFrm)
+- 🐛 修复终端 WebGL 字体渲染异常 (by @CodFrm)
+
+### ♻️ 重构与兼容性
+
+- ♻️ opsctl cp 跳过审批，仅保留审计 (by @CodFrm)
+
 <a name="1.6.2"></a>
 
 ## 1.6.2 (2026-05-18)

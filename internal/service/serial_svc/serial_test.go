@@ -243,7 +243,18 @@ func TestSessionExecCommandReturnsErrorOnMaxTimeout(t *testing.T) {
 }
 
 func TestSessionExecCommandReturnsErrorWhenSessionClosed(t *testing.T) {
-	port := &fakePort{}
+	// 命令写入完成后再注入输出并关闭会话，避免 Close 抢先于 writeLocked
+	// 把 s.closed 置真、导致写入直接返回 errSessionClosed 而拿不到 partial output。
+	writeDone := make(chan struct{}, 1)
+	port := &fakePort{
+		writeFn: func(buf []byte) (int, error) {
+			select {
+			case writeDone <- struct{}{}:
+			default:
+			}
+			return len(buf), nil
+		},
+	}
 	sess := &Session{ID: "serial-closed", port: port}
 
 	resultCh := make(chan string, 1)
@@ -254,14 +265,15 @@ func TestSessionExecCommandReturnsErrorWhenSessionClosed(t *testing.T) {
 		errCh <- err
 	}()
 
-	require.Eventually(t, func() bool {
-		sess.mu.Lock()
-		defer sess.mu.Unlock()
-		return sess.cmdCapture != nil
-	}, time.Second, 5*time.Millisecond)
+	select {
+	case <-writeDone:
+	case <-time.After(time.Second):
+		t.Fatal("ExecCommand did not write the command")
+	}
 	sess.mu.Lock()
 	capture := sess.cmdCapture
 	sess.mu.Unlock()
+	require.NotNil(t, capture)
 	capture.Append([]byte("partial output"))
 	sess.Close()
 
@@ -426,7 +438,11 @@ func TestManagerWatchCallbackSetupClosesUninitializedSession(t *testing.T) {
 		return !ok
 	}, time.Second, 5*time.Millisecond)
 	assert.True(t, sess.IsClosed())
-	assert.Equal(t, 1, port.getCloseCount())
+	// port.Close() 在 closeSessionWithoutCallbacks 中排在 sessions.Delete 之后，
+	// 需等待其完成而非在会话移除后立即断言，否则会偶发 closeCount==0。
+	require.Eventually(t, func() bool {
+		return port.getCloseCount() == 1
+	}, time.Second, 5*time.Millisecond)
 }
 
 func TestManagerWatchCallbackSetupKeepsSessionAfterCallbacks(t *testing.T) {

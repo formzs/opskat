@@ -58,6 +58,12 @@ describe("table export helpers", () => {
     expect(toUpdateSql("appdb.users", ["id", "name"], rows[1], ["id"], "mysql")).toBe(
       "UPDATE `appdb`.`users` SET `id` = '2', `name` = 'O''Reilly' WHERE `id` = '2' LIMIT 1;"
     );
+    expect(toUpdateSql("main.users", ["id", "name"], rows[1], ["id"], "sqlite")).toBe(
+      'UPDATE "main"."users" SET "id" = \'2\', "name" = \'O\'\'Reilly\' WHERE "id" = \'2\';'
+    );
+    expect(toUpdateSql("dbo.users", ["id", "name"], rows[1], ["id"], "mssql")).toBe(
+      "UPDATE TOP (1) [dbo].[users] SET [id] = '2', [name] = 'O''Reilly' WHERE [id] = '2';"
+    );
   });
 
   it("can omit column titles for delimited exports", () => {
@@ -141,5 +147,41 @@ describe("table export helpers", () => {
         pageSize: 50,
       })
     ).toBe("SELECT * FROM `appdb`.`users` ORDER BY `name` ASC LIMIT 50 OFFSET 50");
+  });
+
+  it("builds MSSQL current-page export SQL with OFFSET/FETCH", () => {
+    expect(
+      buildTableExportSelectSql({
+        database: "appdb",
+        table: "dbo.users",
+        driver: "mssql",
+        scope: "page",
+        whereClause: "[active] = '1'",
+        orderByClause: "",
+        sortColumn: "name",
+        sortDir: "desc",
+        page: 2,
+        pageSize: 100,
+      })
+    ).toBe(
+      "SELECT * FROM [dbo].[users] WHERE [active] = '1' ORDER BY [name] DESC OFFSET 200 ROWS FETCH NEXT 100 ROWS ONLY"
+    );
+  });
+
+  it("builds MSSQL current-page export SQL with a fallback ORDER BY", () => {
+    expect(
+      buildTableExportSelectSql({
+        database: "appdb",
+        table: "dbo.users",
+        driver: "mssql",
+        scope: "page",
+        whereClause: "",
+        orderByClause: "",
+        sortColumn: null,
+        sortDir: null,
+        page: 0,
+        pageSize: 100,
+      })
+    ).toBe("SELECT * FROM [dbo].[users] ORDER BY (SELECT NULL) OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY");
   });
 });

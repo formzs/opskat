@@ -8,7 +8,8 @@ export function sqlQuote(value: unknown): string {
 }
 
 export function quoteIdent(name: string, driver?: string): string {
-  if (driver === "postgresql") return `"${name.replace(/"/g, '""')}"`;
+  if (driver === "postgresql" || driver === "sqlite") return `"${name.replace(/"/g, '""')}"`;
+  if (driver === "mssql") return `[${name.replace(/\]/g, "]]")}]`;
   return `\`${name.replace(/`/g, "``")}\``;
 }
 
@@ -21,7 +22,14 @@ export function quoteQualifiedIdent(name: string, driver?: string): string {
 }
 
 export function quoteTableRef(database: string, table: string, driver?: string): string {
-  if (driver === "postgresql") return quoteQualifiedIdent(table, driver);
+  // MSSQL 与 PostgreSQL 一致：忽略 database（连接已限定 catalog），按 schema.table
+  // 加引号，避免两段式 [db].[table] 被当成 schema.object。
+  if (driver === "postgresql" || driver === "mssql") return quoteQualifiedIdent(table, driver);
+  if (driver === "sqlite") {
+    return database
+      ? `${quoteIdent(database, driver)}.${quoteIdent(table, driver)}`
+      : quoteQualifiedIdent(table, driver);
+  }
   return `${quoteIdent(database, driver)}.${quoteIdent(table, driver)}`;
 }
 
@@ -89,7 +97,11 @@ function buildColumnDefinition(
   const defaultPart = normalizeDefault(column.defaultValue)
     ? ` DEFAULT ${formatDefaultValue(column.defaultValue)}`
     : "";
-  const includeComment = driver !== "postgresql" && (forceComment || !!normalizeComment(column.comment));
+  const includeComment =
+    driver !== "postgresql" &&
+    driver !== "sqlite" &&
+    driver !== "mssql" &&
+    (forceComment || !!normalizeComment(column.comment));
   const commentPart = includeComment ? ` COMMENT ${sqlQuote(column.comment)}` : "";
   return `${quoteIdent(column.name.trim(), driver)} ${column.type.trim()}${nullable}${defaultPart}${commentPart}`;
 }
@@ -124,8 +136,11 @@ export function buildAlterStatements(params: {
   const targetTableRef = quoteTableRef(database, targetTable, driver);
 
   if (hasRenameTable) {
-    if (driver === "postgresql") {
+    if (driver === "postgresql" || driver === "sqlite") {
       statements.push(`ALTER TABLE ${originalTableRef} RENAME TO ${quoteIdent(nextTableName, driver)}`);
+    } else if (driver === "mssql") {
+      // MSSQL 无 RENAME TABLE，用 sp_rename；新名是裸对象名（不带 schema/方括号）。
+      statements.push(`EXEC sp_rename ${sqlQuote(table)}, ${sqlQuote(nextTableName)}`);
     } else {
       statements.push(`RENAME TABLE ${originalTableRef} TO ${quoteTableRef(database, nextTableName, driver)}`);
     }
@@ -163,7 +178,7 @@ export function buildAlterStatements(params: {
     const commentChanged = normalizeComment(original.comment) !== normalizeComment(col.comment);
     const renamed = col.originalName !== name;
 
-    if (driver === "postgresql") {
+    if (driver === "postgresql" || driver === "sqlite") {
       const currentName = renamed ? name : col.originalName;
 
       if (renamed) {
@@ -172,13 +187,13 @@ export function buildAlterStatements(params: {
         );
       }
 
-      if (typeChanged) {
+      if (driver === "postgresql" && typeChanged) {
         modifications.push(
           `ALTER TABLE ${targetTableRef} ALTER COLUMN ${quoteIdent(currentName, driver)} TYPE ${col.type.trim()}`
         );
       }
 
-      if (nullableChanged) {
+      if (driver === "postgresql" && nullableChanged) {
         modifications.push(
           col.nullable
             ? `ALTER TABLE ${targetTableRef} ALTER COLUMN ${quoteIdent(currentName, driver)} DROP NOT NULL`
@@ -186,7 +201,7 @@ export function buildAlterStatements(params: {
         );
       }
 
-      if (defaultChanged) {
+      if (driver === "postgresql" && defaultChanged) {
         modifications.push(
           normalizeDefault(col.defaultValue)
             ? `ALTER TABLE ${targetTableRef} ALTER COLUMN ${quoteIdent(currentName, driver)} SET DEFAULT ${formatDefaultValue(
@@ -195,10 +210,26 @@ export function buildAlterStatements(params: {
             : `ALTER TABLE ${targetTableRef} ALTER COLUMN ${quoteIdent(currentName, driver)} DROP DEFAULT`
         );
       }
-      if (commentChanged) {
+      if (driver === "postgresql" && commentChanged) {
         comments.push(
           `COMMENT ON COLUMN ${targetTableRef}.${quoteIdent(currentName, driver)} IS ${
             normalizeComment(col.comment) ? sqlQuote(col.comment) : "NULL"
+          }`
+        );
+      }
+    } else if (driver === "mssql") {
+      // 默认值/注释变更：MSSQL 走命名约束 / 扩展属性，UI 已锁定，这里不生成。
+      if (!renamed && !typeChanged && !nullableChanged) continue;
+      const currentName = renamed ? name : col.originalName;
+      if (renamed) {
+        // sp_rename 的列对象名要带（重命名后的）表名前缀，且整体作为字符串字面量。
+        renames.push(`EXEC sp_rename ${sqlQuote(`${targetTable}.${col.originalName}`)}, ${sqlQuote(name)}, 'COLUMN'`);
+      }
+      if (typeChanged || nullableChanged) {
+        // MSSQL ALTER COLUMN 必须同时给出类型，可顺带改可空性。
+        modifications.push(
+          `ALTER TABLE ${targetTableRef} ALTER COLUMN ${quoteIdent(currentName, driver)} ${col.type.trim()}${
+            col.nullable ? " NULL" : " NOT NULL"
           }`
         );
       }
@@ -221,7 +252,7 @@ export function buildAlterStatements(params: {
     }
   }
 
-  if (driver === "postgresql") {
+  if (driver === "postgresql" || driver === "sqlite") {
     if (additions.length > 0) {
       for (const definition of additions) {
         statements.push(`ALTER TABLE ${targetTableRef} ADD COLUMN ${definition}`);
@@ -237,12 +268,22 @@ export function buildAlterStatements(params: {
       }
     }
 
-    if (tableCommentChanged) {
+    if (driver === "postgresql" && tableCommentChanged) {
       statements.push(
         `COMMENT ON TABLE ${targetTableRef} IS ${normalizeComment(tableCommentDraft) ? sqlQuote(tableCommentDraft) : "NULL"}`
       );
     }
     statements.push(...comments);
+  } else if (driver === "mssql") {
+    // MSSQL：ADD 不带 COLUMN 关键字；列重命名/改类型为独立语句；表注释走扩展属性（UI 已锁定）。
+    for (const definition of additions) {
+      statements.push(`ALTER TABLE ${targetTableRef} ADD ${definition}`);
+    }
+    statements.push(...renames);
+    statements.push(...modifications);
+    for (const dropName of drops) {
+      statements.push(`ALTER TABLE ${targetTableRef} DROP COLUMN ${dropName}`);
+    }
   } else {
     const clauses: string[] = [];
     if (additions.length > 0) {
@@ -326,6 +367,74 @@ export function buildFilterByCellValueClause(
   return `${quotedCol} ${operator === "!=" ? "<>" : operator} ${sqlQuote(value)}`;
 }
 
+export interface BuildPagedSelectArgs {
+  tableRef: string; // 已 quote 的表引用
+  wherePart: string; // 已拼好的 " WHERE ..." 或 ""
+  orderByExpr: string; // ORDER BY 表达式（不含 "ORDER BY"），可为 ""
+  pageSize: number;
+  offset: number;
+  driver?: string;
+}
+
+// buildPagedSelect 按方言拼分页查询。MSSQL 无 LIMIT，用 OFFSET ... ROWS FETCH
+// NEXT ... ROWS ONLY，且该语法要求 ORDER BY，没有排序键时用 (SELECT NULL) 占位。
+// 其它 driver 维持 LIMIT/OFFSET。
+export function buildPagedSelect({
+  tableRef,
+  wherePart,
+  orderByExpr,
+  pageSize,
+  offset,
+  driver,
+}: BuildPagedSelectArgs): string {
+  const base = `SELECT * FROM ${tableRef}${wherePart}`;
+  if (driver === "mssql") {
+    const order = orderByExpr.trim() ? orderByExpr.trim() : "(SELECT NULL)";
+    return `${base} ORDER BY ${order} OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY`;
+  }
+  const orderByPart = orderByExpr.trim() ? ` ORDER BY ${orderByExpr.trim()}` : "";
+  return `${base}${orderByPart} LIMIT ${pageSize} OFFSET ${offset}`;
+}
+
+export function buildStarterSelectSql(tableRef: string, driver?: string, limit = 100): string {
+  if (driver === "mssql") {
+    return `SELECT TOP ${limit} * FROM ${tableRef}`;
+  }
+  return `SELECT * FROM ${tableRef} LIMIT ${limit}`;
+}
+
+export interface BuildSingleRowUpdateArgs {
+  tableRef: string; // 已 quote 的表引用
+  setSql: string; // 已拼好的 SET 子句
+  whereSql: string; // 已拼好的 WHERE 子句
+  hasPrimaryKey: boolean;
+  driver?: string;
+}
+
+// buildSingleRowUpdate 按方言把"只更新一行"的 UPDATE 拼出来。
+// PG/SQLite 无主键时用 ctid/rowid 子查询收敛到物理一行；MySQL 用 LIMIT 1；
+// MSSQL 无 LIMIT，用 UPDATE TOP (1)。从 TableDataTab 内联逻辑抽出以便单测。
+export function buildSingleRowUpdate({
+  tableRef,
+  setSql,
+  whereSql,
+  hasPrimaryKey,
+  driver,
+}: BuildSingleRowUpdateArgs): string {
+  if (driver === "postgresql") {
+    if (hasPrimaryKey) return `UPDATE ${tableRef} SET ${setSql} WHERE ${whereSql};`;
+    return `UPDATE ${tableRef} SET ${setSql} WHERE ctid = (SELECT ctid FROM ${tableRef} WHERE ${whereSql} LIMIT 1);`;
+  }
+  if (driver === "sqlite") {
+    if (hasPrimaryKey) return `UPDATE ${tableRef} SET ${setSql} WHERE ${whereSql};`;
+    return `UPDATE ${tableRef} SET ${setSql} WHERE rowid = (SELECT rowid FROM ${tableRef} WHERE ${whereSql} LIMIT 1);`;
+  }
+  if (driver === "mssql") {
+    return `UPDATE TOP (1) ${tableRef} SET ${setSql} WHERE ${whereSql};`;
+  }
+  return `UPDATE ${tableRef} SET ${setSql} WHERE ${whereSql} LIMIT 1;`;
+}
+
 export interface BuildDeleteStatementArgs {
   database: string;
   table: string;
@@ -365,6 +474,17 @@ export function buildDeleteStatement({
       sql: `DELETE FROM ${tableName} WHERE ctid = (SELECT ctid FROM ${tableName} WHERE ${whereSQL} LIMIT 1);`,
       usesPrimaryKey,
     };
+  }
+  if (driver === "sqlite") {
+    if (usesPrimaryKey) return { sql: `DELETE FROM ${tableName} WHERE ${whereSQL};`, usesPrimaryKey };
+    return {
+      sql: `DELETE FROM ${tableName} WHERE rowid = (SELECT rowid FROM ${tableName} WHERE ${whereSQL} LIMIT 1);`,
+      usesPrimaryKey,
+    };
+  }
+  // MSSQL 无 LIMIT，用 DELETE TOP (1) 限制单行删除（与 MySQL 的 LIMIT 1 安全语义对齐）。
+  if (driver === "mssql") {
+    return { sql: `DELETE TOP (1) FROM ${tableName} WHERE ${whereSQL};`, usesPrimaryKey };
   }
 
   return { sql: `DELETE FROM ${tableName} WHERE ${whereSQL} LIMIT 1;`, usesPrimaryKey };

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Columns2, Rows2, RotateCcw } from "lucide-react";
 import { Button } from "@opskat/ui";
-import { useTerminalStore } from "@/stores/terminalStore";
+import { useTerminalStore, TRANSPORTS } from "@/stores/terminalStore";
 import { useTabStore, type TerminalTabMeta } from "@/stores/tabStore";
 
 interface SessionToolbarProps {
@@ -70,6 +70,9 @@ export function SessionToolbar({ tabId }: SessionToolbarProps) {
 
   const paneValues = Object.values(tabData.panes);
   const anyConnected = paneValues.some((p) => p.connected);
+  // 仅当前 pane 的 transport 支持分屏才点亮分屏按钮(与右键菜单一致),
+  // 否则像 serial 这种不可分屏的会出现"可点却无反应"的死按钮。
+  const canSplit = TRANSPORTS[activePane?.transport ?? "ssh"].canSplit;
 
   const hostInfo =
     tabMeta?.username && tabMeta?.host
@@ -104,7 +107,7 @@ export function SessionToolbar({ tabId }: SessionToolbarProps) {
         variant="ghost"
         size="icon-xs"
         title={t("ssh.session.splitH")}
-        disabled={!anyConnected}
+        disabled={!anyConnected || !canSplit}
         onClick={() => splitPane(tabId, "horizontal")}
       >
         <Rows2 className="h-3.5 w-3.5" />
@@ -113,7 +116,7 @@ export function SessionToolbar({ tabId }: SessionToolbarProps) {
         variant="ghost"
         size="icon-xs"
         title={t("ssh.session.splitV")}
-        disabled={!anyConnected}
+        disabled={!anyConnected || !canSplit}
         onClick={() => splitPane(tabId, "vertical")}
       >
         <Columns2 className="h-3.5 w-3.5" />

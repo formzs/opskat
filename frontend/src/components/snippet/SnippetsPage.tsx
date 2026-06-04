@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Pencil, Copy, Trash2, Lock, Search, Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import {
   Button,
   ConfirmDialog,
@@ -151,7 +152,7 @@ export function SnippetsPage() {
   const onClickDuplicate = async (s: snippet_entity.Snippet) => {
     try {
       await duplicateSnippet(s.ID);
-      toast.success(t("snippet.toast.duplicated"));
+      notifySuccess(t("snippet.toast.duplicated"));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(msg);
@@ -162,7 +163,7 @@ export function SnippetsPage() {
     if (!confirmTarget) return;
     try {
       await removeSnippet(confirmTarget.ID);
-      toast.success(t("snippet.toast.deleted"));
+      notifySuccess(t("snippet.toast.deleted"));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(msg);

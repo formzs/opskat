@@ -16,7 +16,14 @@ import {
 import { ExecuteSQL } from "../../../wailsjs/go/query/Query";
 import { SqlPreviewDialog } from "./SqlPreviewDialog";
 import { toast } from "sonner";
-import { buildAlterStatements, quoteIdent, type AlterDraftColumn, type AlterLoadedColumn } from "@/lib/tableSql";
+import { notifySuccess } from "@/lib/notify";
+import {
+  buildAlterStatements,
+  quoteIdent,
+  sqlQuote,
+  type AlterDraftColumn,
+  type AlterLoadedColumn,
+} from "@/lib/tableSql";
 
 interface AlterTableDialogProps {
   open: boolean;
@@ -69,6 +76,8 @@ export function AlterTableDialog({
   onSuccess,
 }: AlterTableDialogProps) {
   const { t } = useTranslation();
+  const isSqlite = driver === "sqlite";
+  const isMssql = driver === "mssql";
 
   const [columns, setColumns] = useState<AlterDraftColumn[]>([]);
   const [originalColumns, setOriginalColumns] = useState<AlterLoadedColumn[]>([]);
@@ -115,6 +124,20 @@ export function AlterTableDialog({
           `FROM pg_catalog.pg_class cls ` +
           `JOIN pg_catalog.pg_namespace ns ON ns.oid = cls.relnamespace ` +
           `WHERE ns.nspname = 'public' AND cls.relname = '${escapedTable}' LIMIT 1`;
+      } else if (driver === "sqlite") {
+        const schema = database ? `${quoteIdent(database, driver)}.` : "";
+        columnSql = `SELECT name, type, "notnull", dflt_value, pk FROM ${schema}pragma_table_info(${sqlQuote(table)})`;
+      } else if (driver === "mssql") {
+        // MSSQL 无 SHOW FULL COLUMNS，从 INFORMATION_SCHEMA 取列（table 为 schema.table）。
+        // 列注释走扩展属性，UI 已锁定，这里不查表注释。
+        const dot = table.indexOf(".");
+        const schemaName = dot >= 0 ? table.slice(0, dot) : "dbo";
+        const tableOnly = dot >= 0 ? table.slice(dot + 1) : table;
+        columnSql =
+          `SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE, COLUMN_DEFAULT ` +
+          `FROM INFORMATION_SCHEMA.COLUMNS ` +
+          `WHERE TABLE_SCHEMA = '${escapeLiteral(schemaName)}' AND TABLE_NAME = '${escapeLiteral(tableOnly)}' ` +
+          `ORDER BY ORDINAL_POSITION`;
       } else {
         const quotedTable = quoteIdent(table, driver);
         const escapedDb = escapeLiteral(database);
@@ -127,7 +150,9 @@ export function AlterTableDialog({
 
       const [columnResult, tableCommentResult] = await Promise.all([
         ExecuteSQL(assetId, columnSql, database),
-        ExecuteSQL(assetId, tableCommentSql, database),
+        tableCommentSql
+          ? ExecuteSQL(assetId, tableCommentSql, database)
+          : Promise.resolve(JSON.stringify({ rows: [] })),
       ]);
       const parsed: SQLResult = JSON.parse(columnResult);
       const rows = parsed.rows || [];
@@ -151,6 +176,24 @@ export function AlterTableDialog({
               defaultValue,
               comment,
             } as AlterLoadedColumn;
+          }
+          if (driver === "sqlite") {
+            const name = String(getByKey(row, ["name"]) ?? "");
+            const type = String(getByKey(row, ["type"]) ?? "");
+            const nullable = Number(getByKey(row, ["notnull"]) ?? 0) !== 1;
+            const defaultValue = String(getByKey(row, ["dflt_value"]) ?? "");
+            return { name, type, nullable, defaultValue, comment: "" } as AlterLoadedColumn;
+          }
+          if (driver === "mssql") {
+            const name = String(getByKey(row, ["COLUMN_NAME"]) ?? "");
+            const dataType = String(getByKey(row, ["DATA_TYPE"]) ?? "");
+            const maxLenRaw = getByKey(row, ["CHARACTER_MAXIMUM_LENGTH"]);
+            const maxLen = maxLenRaw == null ? null : Number(maxLenRaw);
+            const type =
+              maxLen === -1 ? `${dataType}(max)` : maxLen && maxLen > 0 ? `${dataType}(${maxLen})` : dataType;
+            const nullable = String(getByKey(row, ["IS_NULLABLE"]) ?? "").toUpperCase() === "YES";
+            const defaultValue = String(getByKey(row, ["COLUMN_DEFAULT"]) ?? "");
+            return { name, type, nullable, defaultValue, comment: "" } as AlterLoadedColumn;
           }
 
           const name = String(getByKey(row, ["Field", "field"]) ?? "");
@@ -298,7 +341,7 @@ export function AlterTableDialog({
         await ExecuteSQL(assetId, sql, database);
       }
 
-      toast.success(t("query.alterTableSuccess"));
+      notifySuccess(t("query.alterTableSuccess"));
       setShowSqlPreview(false);
       onOpenChange(false);
       onSuccess(pendingNextTableName);
@@ -343,10 +386,19 @@ export function AlterTableDialog({
                 className="h-8 text-xs font-mono"
                 value={tableCommentDraft}
                 onChange={(e) => setTableCommentDraft(e.target.value)}
-                placeholder={t("query.tableCommentPlaceholder")}
-                disabled={submitting || loadingColumns}
+                placeholder={
+                  isSqlite
+                    ? t("query.alterSqliteUnsupportedTableComment")
+                    : isMssql
+                      ? t("query.alterMssqlUnsupportedTableComment")
+                      : t("query.tableCommentPlaceholder")
+                }
+                disabled={submitting || loadingColumns || isSqlite || isMssql}
               />
             </div>
+
+            {isSqlite && <p className="text-[11px] text-muted-foreground">{t("query.alterSqliteLimitations")}</p>}
+            {isMssql && <p className="text-[11px] text-muted-foreground">{t("query.alterMssqlLimitations")}</p>}
 
             <div className="flex items-center justify-between">
               <Label className="text-xs">{t("query.designTableColumns")}</Label>
@@ -384,70 +436,76 @@ export function AlterTableDialog({
                     <Label className="col-span-1 text-[11px] text-muted-foreground">&nbsp;</Label>
                   </div>
 
-                  {columns.map((col) => (
-                    <div key={col.id} className="rounded-md border border-border p-2">
-                      <div className="grid grid-cols-20 gap-2 items-center">
-                        <div className="col-span-3">
-                          <Input
-                            className="h-8 text-xs font-mono"
-                            value={col.name}
-                            onChange={(e) => updateColumn(col.id, { name: e.target.value })}
-                            placeholder={t("query.columnNamePlaceholder")}
-                            disabled={submitting}
-                          />
-                        </div>
-                        <div className="col-span-4">
-                          <Input
-                            className="h-8 text-xs font-mono"
-                            value={col.type}
-                            onChange={(e) => updateColumn(col.id, { type: e.target.value })}
-                            placeholder={t("query.columnTypePlaceholder")}
-                            disabled={submitting}
-                          />
-                        </div>
-                        <div className="col-span-4">
-                          <Input
-                            className="h-8 text-xs font-mono"
-                            value={col.defaultValue}
-                            onChange={(e) => updateColumn(col.id, { defaultValue: e.target.value })}
-                            placeholder={t("query.defaultValuePlaceholder")}
-                            disabled={submitting}
-                          />
-                        </div>
-                        <div className="col-span-6">
-                          <Input
-                            className="h-8 text-xs font-mono"
-                            value={col.comment}
-                            onChange={(e) => updateColumn(col.id, { comment: e.target.value })}
-                            placeholder={t("query.columnCommentPlaceholder")}
-                            disabled={submitting}
-                          />
-                        </div>
-                        <div className="col-span-2 flex items-center justify-center gap-1">
-                          <Switch
-                            checked={col.nullable}
-                            onCheckedChange={(checked) => updateColumn(col.id, { nullable: checked })}
-                            disabled={submitting}
-                          />
-                          <span className="text-[11px] text-muted-foreground">
-                            {col.nullable ? "NULL" : "NOT NULL"}
-                          </span>
-                        </div>
-                        <div className="col-span-1 flex justify-end">
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            className="h-8 w-8"
-                            onClick={() => handleRemoveColumn(col.id)}
-                            disabled={submitting || columns.length === 1}
-                            title={t("query.removeColumn")}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                  {columns.map((col) => {
+                    const sqliteExistingLocked = isSqlite && !col.isNew;
+                    // MSSQL 现有列：类型/可空可改（ALTER COLUMN），但默认值需命名约束、
+                    // 注释走扩展属性，均锁定不生成。
+                    const mssqlExistingDefaultLocked = isMssql && !col.isNew;
+                    return (
+                      <div key={col.id} className="rounded-md border border-border p-2">
+                        <div className="grid grid-cols-20 gap-2 items-center">
+                          <div className="col-span-3">
+                            <Input
+                              className="h-8 text-xs font-mono"
+                              value={col.name}
+                              onChange={(e) => updateColumn(col.id, { name: e.target.value })}
+                              placeholder={t("query.columnNamePlaceholder")}
+                              disabled={submitting}
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <Input
+                              className="h-8 text-xs font-mono"
+                              value={col.type}
+                              onChange={(e) => updateColumn(col.id, { type: e.target.value })}
+                              placeholder={t("query.columnTypePlaceholder")}
+                              disabled={submitting || sqliteExistingLocked}
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <Input
+                              className="h-8 text-xs font-mono"
+                              value={col.defaultValue}
+                              onChange={(e) => updateColumn(col.id, { defaultValue: e.target.value })}
+                              placeholder={t("query.defaultValuePlaceholder")}
+                              disabled={submitting || sqliteExistingLocked || mssqlExistingDefaultLocked}
+                            />
+                          </div>
+                          <div className="col-span-6">
+                            <Input
+                              className="h-8 text-xs font-mono"
+                              value={col.comment}
+                              onChange={(e) => updateColumn(col.id, { comment: e.target.value })}
+                              placeholder={t("query.columnCommentPlaceholder")}
+                              disabled={submitting || isSqlite || isMssql}
+                            />
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center gap-1">
+                            <Switch
+                              checked={col.nullable}
+                              onCheckedChange={(checked) => updateColumn(col.id, { nullable: checked })}
+                              disabled={submitting || sqliteExistingLocked}
+                            />
+                            <span className="text-[11px] text-muted-foreground">
+                              {col.nullable ? "NULL" : "NOT NULL"}
+                            </span>
+                          </div>
+                          <div className="col-span-1 flex justify-end">
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="h-8 w-8"
+                              onClick={() => handleRemoveColumn(col.id)}
+                              disabled={submitting || columns.length === 1}
+                              title={t("query.removeColumn")}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

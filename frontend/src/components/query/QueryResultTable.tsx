@@ -25,6 +25,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@opskat/ui";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
+import { notifyCopied } from "@/lib/notify";
 import { cellValueToText } from "@/lib/cellValue";
 import type { CellValueFilterOperator } from "@/lib/tableSql";
 import { TABLE_FILTER_OPERATOR_LABEL_KEYS, TABLE_FILTER_OPERATOR_OPTIONS } from "@/lib/tableFilterOperators";
@@ -693,7 +694,7 @@ function QueryResultTableImpl({
                 .join("\n")
             : cellValueToText(ctxMenu.value);
       await navigator.clipboard.writeText(text);
-      toast.success(t("query.copied"));
+      notifyCopied(t("query.copied"));
     } catch (e) {
       toast.error(String(e));
     } finally {
@@ -713,7 +714,7 @@ function QueryResultTableImpl({
           ? selectedColumnOrder.join("\t")
           : col;
       await navigator.clipboard.writeText(text);
-      toast.success(t("query.copied"));
+      notifyCopied(t("query.copied"));
     } catch (e) {
       toast.error(String(e));
     } finally {

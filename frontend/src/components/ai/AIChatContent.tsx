@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { notifyCopied } from "@/lib/notify";
 import Markdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
@@ -749,9 +750,9 @@ const AssistantToolbar = memo(function AssistantToolbar({
     if (!copyText) return;
     try {
       await navigator.clipboard.writeText(copyText);
-      toast.success(t("ai.copied"), { duration: 1500, position: "top-center" });
+      notifyCopied(t("ai.copied"));
     } catch {
-      toast.error(t("ai.copyFailed"), { duration: 2000, position: "top-center" });
+      toast.error(t("ai.copyFailed"));
     }
   }, [copyText, t]);
 

@@ -3,12 +3,10 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
-import { WriteSSH } from "../../../wailsjs/go/ssh/SSH";
-import { WriteSerial } from "../../../wailsjs/go/serial/Serial";
 import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { base64ToBytes, bytesToBase64 } from "@/lib/terminalEncode";
-import { useTerminalStore } from "@/stores/terminalStore";
-import { DEFAULT_TERMINAL_FONT_FAMILY, useTerminalThemeStore } from "@/stores/terminalThemeStore";
+import { useTerminalStore, TRANSPORTS, type TerminalTransport } from "@/stores/terminalStore";
+import { useTerminalThemeStore } from "@/stores/terminalThemeStore";
 import { useShortcutStore } from "@/stores/shortcutStore";
 import { withTerminalFontFallback, withTerminalFontIsolation } from "@/data/terminalFonts";
 import i18n from "@/i18n";
@@ -39,7 +37,7 @@ export function getOrCreateTerminal(
     fontFamily?: string;
     theme?: ITheme;
     scrollback: number;
-    transport?: "ssh" | "serial";
+    transport?: TerminalTransport;
     webglEnabled?: boolean;
   }
 ): TerminalInstance {
@@ -50,7 +48,7 @@ export function getOrCreateTerminal(
   container.style.height = "100%";
   container.style.width = "100%";
 
-  const resolvedFontFamily = withTerminalFontFallback(init.fontFamily || DEFAULT_TERMINAL_FONT_FAMILY);
+  const resolvedFontFamily = withTerminalFontFallback(init.fontFamily);
 
   const term = new XTerminal({
     cursorBlink: true,
@@ -69,11 +67,12 @@ export function getOrCreateTerminal(
   term.loadAddon(searchAddon);
   term.open(container);
   const imageController = new TerminalImageController(sessionId, term);
-  imageController.setEnabled(useTerminalThemeStore.getState().enableImagePreview);
-
-  const isSerial = init.transport ? init.transport === "serial" : sessionId.startsWith("serial-");
-  const writeFn = isSerial ? WriteSerial : WriteSSH;
-  const eventPrefix = isSerial ? "serial" : "ssh";
+  const transport: TerminalTransport =
+    init.transport ?? (sessionId.startsWith("serial-") ? "serial" : sessionId.startsWith("local-") ? "local" : "ssh");
+  const spec = TRANSPORTS[transport];
+  const writeFn = spec.write;
+  const eventPrefix = spec.eventPrefix;
+  imageController.setEnabled(transport === "ssh" && useTerminalThemeStore.getState().enableImagePreview);
 
   const bridge = createTerminalInputBridge({
     term,

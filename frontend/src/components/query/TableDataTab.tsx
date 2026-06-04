@@ -31,11 +31,14 @@ import { ExportTableDataDialog } from "./ExportTableDataDialog";
 import { TableFilterBuilder } from "./TableFilterBuilder";
 import { TableDataStatusBar, TableEditorToolbar, type TableExportFormat } from "./TableEditorToolbar";
 import { toast } from "sonner";
+import { notifyCopied, notifySuccess } from "@/lib/notify";
 import { toInsertSql, toTsv, toTsvData, toTsvFields, toUpdateSql } from "@/lib/tableExport";
 import { buildInsertStatement, validateInsertRow, type TableColumnRule } from "@/lib/tableEdit";
 import {
   buildDeleteStatement,
   buildFilterByCellValueClause,
+  buildPagedSelect,
+  buildSingleRowUpdate,
   quoteIdent,
   quoteTableRef,
   sqlQuote,
@@ -282,8 +285,7 @@ function TableDataTabContent({ tabId, innerTabId, database, table }: TableDataTa
           ? `${quoteIdent(sortColumn, driver)} ${sortDir === "asc" ? "ASC" : "DESC"}`
           : orderByClause.trim();
       const wherePart = where ? ` WHERE ${where}` : "";
-      const orderByPart = orderBy ? ` ORDER BY ${orderBy}` : "";
-      const sql = `SELECT * FROM ${tableName}${wherePart}${orderByPart} LIMIT ${pageSize} OFFSET ${offset}`;
+      const sql = buildPagedSelect({ tableRef: tableName, wherePart, orderByExpr: orderBy, pageSize, offset, driver });
 
       try {
         const result = await ExecuteSQL(assetId, sql, database);
@@ -432,17 +434,15 @@ function TableDataTabContent({ tabId, innerTabId, database, table }: TableDataTa
       const tableName = quoteTableRef(database, table, driver);
       const whereSQL = whereClauses.join(" AND ");
 
-      if (driver === "postgresql") {
-        if (hasPK) {
-          statements.push(`UPDATE ${tableName} SET ${setClauses.join(", ")} WHERE ${whereSQL};`);
-        } else {
-          statements.push(
-            `UPDATE ${tableName} SET ${setClauses.join(", ")} WHERE ctid = (SELECT ctid FROM ${tableName} WHERE ${whereSQL} LIMIT 1);`
-          );
-        }
-      } else {
-        statements.push(`UPDATE ${tableName} SET ${setClauses.join(", ")} WHERE ${whereSQL} LIMIT 1;`);
-      }
+      statements.push(
+        buildSingleRowUpdate({
+          tableRef: tableName,
+          setSql: setClauses.join(", "),
+          whereSql: whereSQL,
+          hasPrimaryKey: hasPK,
+          driver,
+        })
+      );
     }
     return statements;
   }, [edits, rows, columns, driver, database, table, primaryKeys]);
@@ -537,7 +537,7 @@ function TableDataTabContent({ tabId, innerTabId, database, table }: TableDataTa
     setDialogMode(null);
 
     if (affectedTotal > 0) {
-      toast.success(t("query.updateSuccessAffected", { affected: affectedTotal }));
+      notifySuccess(t("query.updateSuccessAffected", { affected: affectedTotal }));
       setEdits(new Map());
       setNewRows([]);
       fetchData(page);
@@ -722,7 +722,7 @@ function TableDataTabContent({ tabId, innerTabId, database, table }: TableDataTa
       const result = await ExecuteSQL(assetId, deletePreview.statement, database);
       const parsed: SQLResult = JSON.parse(result);
       const affected = Number(parsed.affected_rows ?? 0);
-      toast.success(t("query.deleteRecordSuccess", { affected }));
+      notifySuccess(t("query.deleteRecordSuccess", { affected }));
       setDeletePreview(null);
       setEdits(new Map());
       setNewRows([]);
@@ -759,7 +759,8 @@ function TableDataTabContent({ tabId, innerTabId, database, table }: TableDataTa
         ? ctx.selectedRowIndices.map((i) => rows[i]).filter(Boolean)
         : [rows[ctx.rowIdx]];
       if (activeRows.length === 0) return;
-      const tableName = driver === "postgresql" ? table : `${database}.${table}`;
+      // MSSQL 与 PG 一样按 schema.table 引用，不带 database 前缀（避免两段式被当成 schema.object）
+      const tableName = driver === "postgresql" || driver === "mssql" ? table : `${database}.${table}`;
       const contentByFormat: Record<CopyAsFormat, string> = {
         insert: toInsertSql(tableName, activeColumns, activeRows, driver),
         update: toUpdateSql(tableName, activeColumns, activeRows[0], primaryKeys, driver),
@@ -768,7 +769,7 @@ function TableDataTabContent({ tabId, innerTabId, database, table }: TableDataTa
         "tsv-fields-data": toTsv(activeColumns, activeRows),
       };
       await navigator.clipboard.writeText(contentByFormat[format]);
-      toast.success(t("query.copied"));
+      notifyCopied(t("query.copied"));
     },
     [columns, database, driver, primaryKeys, rows, table, t]
   );
@@ -868,6 +869,60 @@ function TableDataTabContent({ tabId, innerTabId, database, table }: TableDataTa
 
           ddl = `CREATE TABLE ${quoteIdent("public", driver)}.${quoteIdent(table, driver)} (\n  ${defs.join(",\n  ")}\n);`;
         }
+      } else if (driver === "sqlite") {
+        const schema = database ? `${quoteIdent(database, driver)}.` : "";
+        const result = await ExecuteSQL(
+          assetId,
+          `SELECT sql FROM ${schema}sqlite_master WHERE type IN ('table', 'view') AND name = ${sqlQuote(table)} LIMIT 1`,
+          database
+        );
+        const parsed: SQLResult = JSON.parse(result);
+        const row = parsed.rows?.[0];
+        if (row) {
+          ddl = String(row.sql ?? Object.values(row)[0] ?? "");
+        }
+      } else if (driver === "mssql") {
+        // MSSQL 无 SHOW CREATE TABLE，从 INFORMATION_SCHEMA 重建（table 为 schema.table）。
+        const dot = table.indexOf(".");
+        const schemaLit = sqlQuote(dot >= 0 ? table.slice(0, dot) : "dbo");
+        const tableLit = sqlQuote(dot >= 0 ? table.slice(dot + 1) : table);
+        const columnsSql =
+          `SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE, COLUMN_DEFAULT ` +
+          `FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ${schemaLit} AND TABLE_NAME = ${tableLit} ORDER BY ORDINAL_POSITION`;
+        const primaryKeySql =
+          `SELECT kcu.COLUMN_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc ` +
+          `JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA ` +
+          `WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY' AND tc.TABLE_SCHEMA = ${schemaLit} AND tc.TABLE_NAME = ${tableLit} ORDER BY kcu.ORDINAL_POSITION`;
+
+        const [columnsResult, primaryKeyResult] = await Promise.all([
+          ExecuteSQL(assetId, columnsSql, database),
+          ExecuteSQL(assetId, primaryKeySql, database),
+        ]);
+        const columnsParsed: SQLResult = JSON.parse(columnsResult);
+        const primaryKeyParsed: SQLResult = JSON.parse(primaryKeyResult);
+        const cols = columnsParsed.rows || [];
+        const pkColumns = (primaryKeyParsed.rows || []).map((r) => String(Object.values(r)[0] ?? "")).filter(Boolean);
+
+        if (cols.length > 0) {
+          const defs = cols.map((col) => {
+            const name = String(col.COLUMN_NAME ?? col.column_name ?? "");
+            const dataType = String(col.DATA_TYPE ?? col.data_type ?? "");
+            const maxLenRaw = col.CHARACTER_MAXIMUM_LENGTH ?? col.character_maximum_length;
+            const maxLen = maxLenRaw == null ? null : Number(maxLenRaw);
+            const type =
+              maxLen === -1 ? `${dataType}(max)` : maxLen && maxLen > 0 ? `${dataType}(${maxLen})` : dataType;
+            const nullable = String(col.IS_NULLABLE ?? col.is_nullable ?? "").toUpperCase() === "YES";
+            const colDefault = col.COLUMN_DEFAULT == null ? "" : String(col.COLUMN_DEFAULT);
+            let line = `${quoteIdent(name, driver)} ${type}`;
+            if (!nullable) line += " NOT NULL";
+            if (colDefault) line += ` DEFAULT ${colDefault}`;
+            return line;
+          });
+          if (pkColumns.length > 0) {
+            defs.push(`PRIMARY KEY (${pkColumns.map((c) => quoteIdent(c, driver)).join(", ")})`);
+          }
+          ddl = `CREATE TABLE ${quoteTableRef(database, table, driver)} (\n  ${defs.join(",\n  ")}\n);`;
+        }
       } else {
         const quotedTable = quoteIdent(table, driver);
         const result = await ExecuteSQL(assetId, `SHOW CREATE TABLE ${quotedTable}`, database);
@@ -892,7 +947,7 @@ function TableDataTabContent({ tabId, innerTabId, database, table }: TableDataTa
     const text = ddlLoading ? "" : ddlSQL;
     if (!text) return;
     await navigator.clipboard.writeText(text);
-    toast.success(t("query.copied"));
+    notifyCopied(t("query.copied"));
   }, [ddlLoading, ddlSQL, t]);
 
   // 提到顶层走 useCallback,使 QueryResultTable 的 memo 浅比较生效;

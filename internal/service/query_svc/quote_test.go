@@ -44,3 +44,38 @@ func TestSQLQuote(t *testing.T) {
 		So(SQLQuote("it's"), ShouldEqual, `'it''s'`)
 	})
 }
+
+func TestQuoteIdentMSSQL(t *testing.T) {
+	Convey("MSSQL 用 [bracket]", t, func() {
+		So(QuoteIdent("user", asset_entity.DriverMSSQL), ShouldEqual, "[user]")
+		So(QuoteIdent("a]b", asset_entity.DriverMSSQL), ShouldEqual, "[a]]b]")
+	})
+}
+
+func TestQuoteIdentSQLite(t *testing.T) {
+	Convey("SQLite 用 \"double\"", t, func() {
+		So(QuoteIdent("user", asset_entity.DriverSQLite), ShouldEqual, `"user"`)
+		So(QuoteIdent(`a"b`, asset_entity.DriverSQLite), ShouldEqual, `"a""b"`)
+	})
+}
+
+func TestQuoteTableRefMSSQL(t *testing.T) {
+	// MSSQL 两段式 [db].[table] 会被解释为 schema.object（schema=db），导致
+	// "Invalid object name"。连接已经通过 DSN database= 限定了 catalog，所以
+	// 这里与 PostgreSQL 一致：忽略 database，只按 schema.table 加方括号。
+	Convey("MSSQL 裸表名只引用表名（不把 db 当 schema）", t, func() {
+		So(QuoteTableRef("appdb", "users", asset_entity.DriverMSSQL), ShouldEqual, "[users]")
+	})
+	Convey("MSSQL 支持 schema.table（输出 [schema].[table]）", t, func() {
+		So(QuoteTableRef("appdb", "dbo.users", asset_entity.DriverMSSQL), ShouldEqual, "[dbo].[users]")
+	})
+}
+
+func TestQuoteTableRefSQLite(t *testing.T) {
+	Convey("SQLite 有 database 时按 schema.table 引用", t, func() {
+		So(QuoteTableRef("main", "users", asset_entity.DriverSQLite), ShouldEqual, `"main"."users"`)
+	})
+	Convey("SQLite 无 database 时只引用表名", t, func() {
+		So(QuoteTableRef("", "users", asset_entity.DriverSQLite), ShouldEqual, `"users"`)
+	})
+}

@@ -2,17 +2,14 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState,
 import type { Terminal as XTerminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
-import { WriteSSH } from "../../../wailsjs/go/ssh/SSH";
-import { WriteSerial, ResizeSerialTerminal } from "../../../wailsjs/go/serial/Serial";
-import { ResizeSSH } from "../../../wailsjs/go/ssh/SSH";
 import { useShortcutStore, formatBinding, formatModKey } from "@/stores/shortcutStore";
-import { useTerminalStore } from "@/stores/terminalStore";
+import { useTerminalStore, TRANSPORTS } from "@/stores/terminalStore";
 import { useTerminalThemeStore, toXtermTheme } from "@/stores/terminalThemeStore";
 import { builtinThemes, defaultLightTheme, defaultDarkTheme } from "@/data/terminalThemes";
 import { withTerminalFontFallback, withTerminalFontIsolation } from "@/data/terminalFonts";
 import { useResolvedTheme } from "@/components/theme-provider";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { notifyCopied } from "@/lib/notify";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -56,7 +53,6 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const customThemes = useTerminalThemeStore((s) => s.customThemes);
   const resolvedTheme = useResolvedTheme();
   const transport = useTerminalStore((s) => s.tabData[tabId]?.panes[sessionId]?.transport ?? "ssh");
-  const isSerial = transport === "serial";
   const xtermTheme = useMemo(() => {
     if (selectedThemeId === "default") {
       return resolvedTheme === "light" ? toXtermTheme(defaultLightTheme) : toXtermTheme(defaultDarkTheme);
@@ -65,6 +61,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       builtinThemes.find((t) => t.id === selectedThemeId) || customThemes.find((t) => t.id === selectedThemeId);
     return theme ? toXtermTheme(theme) : undefined;
   }, [selectedThemeId, customThemes, resolvedTheme]);
+  const spec = TRANSPORTS[transport];
 
   useImperativeHandle(ref, () => ({
     toggleSearch: () => setShowSearch((v) => !v),
@@ -74,18 +71,17 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     const selection = termRef.current?.getSelection();
     if (selection) {
       navigator.clipboard.writeText(selection);
-      toast.success(t("ssh.contextMenu.copied"), { duration: 1500 });
+      notifyCopied(t("ssh.contextMenu.copied"));
     }
   }, [t]);
 
   const handlePaste = useCallback(() => {
     navigator.clipboard.readText().then((text) => {
       if (text && termRef.current) {
-        const writeFn = isSerial ? WriteSerial : WriteSSH;
-        writeFn(sessionId, bytesToBase64(new TextEncoder().encode(text))).catch(console.error);
+        TRANSPORTS[transport].write(sessionId, bytesToBase64(new TextEncoder().encode(text))).catch(console.error);
       }
     });
-  }, [isSerial, sessionId]);
+  }, [transport, sessionId]);
 
   const handleSelectAll = useCallback(() => {
     termRef.current?.selectAll();
@@ -95,6 +91,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
+    // 该 effect 故意只依赖 [sessionId]（见末尾 eslint-disable）。effect 内用到的
+    // spec 来自 TRANSPORTS（模块级常量），引用稳定，不必进依赖数组。
     const inst = getOrCreateTerminal(sessionId, {
       fontSize,
       fontFamily,
@@ -117,8 +115,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       inst.imageController.requestRender();
       const dims = inst.fitAddon.proposeDimensions();
       if (dims && dims.cols > 0 && dims.rows > 0) {
-        const resizeFn = isSerial ? ResizeSerialTerminal : ResizeSSH;
-        resizeFn(sessionId, dims.cols, dims.rows).catch(console.error);
+        spec.resize(sessionId, dims.cols, dims.rows).catch(console.error);
       }
     });
 
@@ -127,7 +124,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       const selection = inst.term.getSelection();
       if (selection) {
         navigator.clipboard.writeText(selection);
-        toast.success(t("ssh.contextMenu.copied"), { duration: 1500 });
+        notifyCopied(t("ssh.contextMenu.copied"));
         return true;
       }
       return false;
@@ -146,8 +143,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         inst.imageController.requestRender();
         const dims = inst.fitAddon.proposeDimensions();
         if (dims && dims.cols > 0 && dims.rows > 0) {
-          const resizeFn = isSerial ? ResizeSerialTerminal : ResizeSSH;
-          resizeFn(sessionId, dims.cols, dims.rows).catch(console.error);
+          spec.resize(sessionId, dims.cols, dims.rows).catch(console.error);
         }
       }, 50);
     });
@@ -172,7 +168,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       fitAddonRef.current = null;
       searchAddonRef.current = null;
     };
-  }, [fontFamily, fontSize, isSerial, scrollback, sessionId, transport, webglEnabled, xtermTheme]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   useEffect(() => {
     const inst = getTerminalInstance(sessionId);
@@ -254,16 +251,16 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
             <ContextMenuShortcut>{formatBinding(shortcuts["panel.filter"])}</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => splitPane(tabId, "horizontal")} disabled={!paneConnected || isSerial}>
+          <ContextMenuItem onClick={() => splitPane(tabId, "horizontal")} disabled={!paneConnected || !spec.canSplit}>
             {t("ssh.session.splitH")}
             <ContextMenuShortcut>{formatBinding(shortcuts["split.horizontal"])}</ContextMenuShortcut>
           </ContextMenuItem>
-          <ContextMenuItem onClick={() => splitPane(tabId, "vertical")} disabled={!paneConnected || isSerial}>
+          <ContextMenuItem onClick={() => splitPane(tabId, "vertical")} disabled={!paneConnected || !spec.canSplit}>
             {t("ssh.session.splitV")}
             <ContextMenuShortcut>{formatBinding(shortcuts["split.vertical"])}</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuSeparator />
-          {!isSerial && (
+          {spec.hasDirectorySync && (
             <ContextMenuItem onClick={() => toggleFileManager(tabId)}>{t("ssh.contextMenu.sftp")}</ContextMenuItem>
           )}
           <ContextMenuItem onClick={() => reconnect(tabId)}>{t("ssh.session.reconnect")}</ContextMenuItem>

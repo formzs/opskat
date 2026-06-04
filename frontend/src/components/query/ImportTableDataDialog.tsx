@@ -27,6 +27,7 @@ import {
 } from "@opskat/ui";
 import { FilePlus2, Link, Loader2, Play, Table2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import { ExecuteSQL } from "../../../wailsjs/go/query/Query";
 import {
   buildImportInsertSql,
@@ -319,7 +320,8 @@ export function ImportTableDataDialog({
     setMapping(nextAutoMapping(parsed.headers, columns));
   }, [columns, parsed.headers]);
 
-  const tableName = driver === "postgresql" ? table : `${database}.${table}`;
+  // MSSQL 与 PG 一样按 schema.table 引用，不带 database 前缀（避免被当成 schema.object）
+  const tableName = driver === "postgresql" || driver === "mssql" ? table : `${database}.${table}`;
   const primaryKeyColumns = useMemo(
     () => Array.from(primaryKeys).filter((column) => Object.values(mapping).includes(column)),
     [mapping, primaryKeys]
@@ -481,7 +483,7 @@ export function ImportTableDataDialog({
           seconds: (performance.now() - startedAt) / 1000,
         });
         if (error === 0) {
-          toast.success(t("query.importSuccess", { affected: added + updated + deleted }));
+          notifySuccess(t("query.importSuccess", { affected: added + updated + deleted }));
           onOpenChange(false);
           onSuccess();
         } else {
@@ -528,7 +530,7 @@ export function ImportTableDataDialog({
           });
         }
         if (error === 0) {
-          toast.success(t("query.importSuccess", { affected: added }));
+          notifySuccess(t("query.importSuccess", { affected: added }));
           onOpenChange(false);
           onSuccess();
         } else {

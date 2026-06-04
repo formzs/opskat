@@ -172,7 +172,7 @@ func stripTrailingSemicolon(s string) string {
 }
 
 // ExecuteSQLPaged 对 SELECT/WITH 语句进行子查询包装分页，其他语句走 ExecuteSQL
-func ExecuteSQLPaged(ctx context.Context, db *sql.DB, sqlText string, page, pageSize int) (string, error) {
+func ExecuteSQLPaged(ctx context.Context, db *sql.DB, sqlText string, page, pageSize int, driver asset_entity.DatabaseDriver) (string, error) {
 	trimmed := strings.TrimSpace(strings.ToUpper(sqlText))
 
 	// 非查询语句或不可分页的查询（SHOW/DESCRIBE/EXPLAIN）走原逻辑
@@ -183,15 +183,20 @@ func ExecuteSQLPaged(ctx context.Context, db *sql.DB, sqlText string, page, page
 	cleanSQL := stripTrailingSemicolon(sqlText)
 	offset := page * pageSize
 
+	countSourceSQL := cleanSQL
+	if driver == asset_entity.DriverMSSQL {
+		countSourceSQL = stripTopLevelOrderBy(cleanSQL)
+	}
+
 	// 1. 获取总行数
-	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _t", cleanSQL) //nolint:gosec // SQL is user-provided and intentionally executed
+	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS _t", countSourceSQL) //nolint:gosec // SQL is user-provided and intentionally executed
 	var totalCount int
 	if err := db.QueryRowContext(ctx, countSQL).Scan(&totalCount); err != nil {
 		return "", fmt.Errorf("count query failed: %w", err)
 	}
 
-	// 2. 分页查询
-	pagedSQL := fmt.Sprintf("SELECT * FROM (%s) AS _t LIMIT %d OFFSET %d", cleanSQL, pageSize, offset) //nolint:gosec // SQL is user-provided and intentionally executed
+	// 2. 分页查询：MSSQL 无 LIMIT，用 OFFSET/FETCH（需 ORDER BY，用 (SELECT NULL) 占位）
+	pagedSQL := pagedQuerySQL(cleanSQL, offset, pageSize, driver)
 	rows, err := db.QueryContext(ctx, pagedSQL)
 	if err != nil {
 		return "", fmt.Errorf("SQL query failed: %w", err)
@@ -203,6 +208,115 @@ func ExecuteSQLPaged(ctx context.Context, db *sql.DB, sqlText string, page, page
 	}()
 
 	return formatRowsPagedJSON(rows, totalCount)
+}
+
+// pagedQuerySQL 把已去分号的查询包成分页子查询。MSSQL 不支持 LIMIT/OFFSET，
+// 必须用 OFFSET ... ROWS FETCH NEXT ... ROWS ONLY，且该语法要求 ORDER BY，
+// 这里用 ORDER BY (SELECT NULL) 占位（不强加排序键）。其他 driver 保持 LIMIT/OFFSET。
+func pagedQuerySQL(cleanSQL string, offset, pageSize int, driver asset_entity.DatabaseDriver) string {
+	if driver == asset_entity.DriverMSSQL {
+		if hasTopLevelOrderBy(cleanSQL) {
+			return fmt.Sprintf("%s OFFSET %d ROWS FETCH NEXT %d ROWS ONLY", cleanSQL, offset, pageSize)
+		}
+		return fmt.Sprintf(
+			"SELECT * FROM (%s) AS _t ORDER BY (SELECT NULL) OFFSET %d ROWS FETCH NEXT %d ROWS ONLY",
+			cleanSQL, offset, pageSize)
+	}
+	return fmt.Sprintf("SELECT * FROM (%s) AS _t LIMIT %d OFFSET %d", cleanSQL, pageSize, offset)
+}
+
+func stripTopLevelOrderBy(sqlText string) string {
+	if idx := topLevelOrderByIndex(sqlText); idx >= 0 {
+		return strings.TrimSpace(sqlText[:idx])
+	}
+	return sqlText
+}
+
+func hasTopLevelOrderBy(sqlText string) bool {
+	return topLevelOrderByIndex(sqlText) >= 0
+}
+
+func topLevelOrderByIndex(sqlText string) int {
+	upper := strings.ToUpper(sqlText)
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracketQuote := false
+
+	for i := 0; i < len(sqlText); i++ {
+		ch := sqlText[i]
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < len(sqlText) && sqlText[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < len(sqlText) && sqlText[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracketQuote {
+			if ch == ']' {
+				if i+1 < len(sqlText) && sqlText[i+1] == ']' {
+					i++
+					continue
+				}
+				inBracketQuote = false
+			}
+			continue
+		}
+
+		switch ch {
+		case '\'':
+			inSingleQuote = true
+		case '"':
+			inDoubleQuote = true
+		case '[':
+			inBracketQuote = true
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		default:
+			if depth == 0 && strings.HasPrefix(upper[i:], "ORDER") && isSQLWordBoundary(sqlText, i-1) {
+				afterOrder := i + len("ORDER")
+				if afterOrder < len(sqlText) && isSQLSpace(sqlText[afterOrder]) {
+					j := afterOrder
+					for j < len(sqlText) && isSQLSpace(sqlText[j]) {
+						j++
+					}
+					if strings.HasPrefix(upper[j:], "BY") && isSQLWordBoundary(sqlText, j+len("BY")) {
+						return i
+					}
+				}
+			}
+		}
+	}
+	return -1
+}
+
+func isSQLWordBoundary(sqlText string, idx int) bool {
+	if idx < 0 || idx >= len(sqlText) {
+		return true
+	}
+	ch := sqlText[idx]
+	return ch != '_' && (ch < '0' || ch > '9') && (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z')
+}
+
+func isSQLSpace(ch byte) bool {
+	return ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' || ch == '\f'
 }
 
 func formatRowsPagedJSON(rows *sql.Rows, totalCount int) (string, error) {
@@ -254,6 +368,7 @@ func isQueryStatement(upper string) bool {
 		strings.HasPrefix(upper, "DESCRIBE") ||
 		strings.HasPrefix(upper, "DESC ") ||
 		strings.HasPrefix(upper, "EXPLAIN") ||
+		strings.HasPrefix(upper, "PRAGMA") ||
 		strings.HasPrefix(upper, "WITH") // CTE
 }
 

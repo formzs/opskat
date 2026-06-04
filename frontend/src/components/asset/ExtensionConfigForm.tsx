@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import { useTranslation } from "react-i18next";
 import { Loader2, PlugZap } from "lucide-react";
 import {
@@ -68,7 +69,7 @@ export function ExtensionConfigForm({
     setTesting(true);
     try {
       await CallExtensionAction(extensionName, "test_connection", JSON.stringify(value));
-      toast.success(tCommon("asset.testConnectionSuccess"));
+      notifySuccess(tCommon("asset.testConnectionSuccess"));
     } catch (e) {
       toast.error(`${tCommon("asset.testConnectionFailed")}: ${String(e)}`);
     } finally {

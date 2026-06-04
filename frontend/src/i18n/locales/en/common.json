@@ -22,13 +22,15 @@
   },
   "nav": {
     "home": "Home",
-    "database": "Database",
+    "database": "SQL Database",
     "ssh": "SSH",
     "redis": "Redis",
     "mongodb": "MongoDB",
     "kafka": "Kafka",
     "k8s": "K8S Cluster",
     "serial": "Serial Port",
+    "local": "Local Terminal",
+    "etcd": "etcd",
     "sshKeys": "Credentials",
     "settings": "Settings",
     "appearance": "Appearance",
@@ -36,6 +38,16 @@
     "audit": "Audit Log",
     "forward": "Port Forward",
     "snippets": "Snippets"
+  },
+  "assetType": {
+    "searchPlaceholder": "Search type…",
+    "noResults": "No matching type",
+    "group": {
+      "servers": "Servers & Terminals",
+      "databases": "Databases",
+      "middleware": "Middleware & Platforms",
+      "extension": "Extensions"
+    }
   },
   "forward": {
     "create": "New Config",
@@ -71,8 +83,10 @@
     "edit": "Edit",
     "add": "Add",
     "copy": "Copy",
+    "copied": "Copied",
     "close": "Close",
     "submit": "Submit",
+    "browse": "Browse",
     "openInTab": "Open in New Tab",
     "editPermission": "Asset Details",
     "open": "Open",
@@ -129,6 +143,7 @@
     "group": "Group",
     "description": "Description",
     "groupName": "Group Name",
+    "editGroupSettings": "Edit Group Settings",
     "groupDescriptionPlaceholder": "Describe the purpose of this group (optional, visible to AI)",
     "search": "Search...",
     "filterByType": "Filter by asset type",
@@ -237,6 +252,7 @@
     "formMissingKafkaBrokers": "Enter Bootstrap Brokers.",
     "formMissingKubeconfig": "Provide kubeconfig.",
     "formMissingSerialPort": "Enter a serial port path.",
+    "formMissingPath": "Please specify the database file path.",
     "moveUp": "Move Up",
     "moveDown": "Move Down",
     "moveTop": "Move to Top",
@@ -248,10 +264,17 @@
     "typeKafka": "Kafka",
     "typeK8s": "K8S Cluster",
     "typeSerial": "Serial Port",
+    "typeEtcd": "etcd",
     "driver": "Database Driver",
     "driverMySQL": "MySQL",
     "driverPostgreSQL": "PostgreSQL",
     "driverMongoDB": "MongoDB",
+    "driverMSSQL": "SQL Server",
+    "driverSQLite": "SQLite",
+    "sqliteFilePath": "Database file path",
+    "sqliteFilePathPlaceholder": "/Users/.../my.db",
+    "sqliteFilePathBrowse": "Choose file…",
+    "mssqlReadOnlyHint": "SQL Server enforces read-only via policy only, not at the connection level",
     "database": "Default Database",
     "databasePlaceholder": "Database name (optional)",
     "sslMode": "SSL Mode",
@@ -323,6 +346,12 @@
     "k8sPolicyHint": "Commands not listed will require user confirmation. Rules support * wildcards; broad patterns such as * may allow high-risk commands or deny many commands, so configure them carefully.",
     "k8sPolicyPlaceholder": "Press Enter to add, comma-separated for batch import",
     "k8sPolicyTestPlaceholder": "Type a kubectl command to test, e.g. kubectl get pods",
+    "etcdPolicy": "etcd Operation Policy",
+    "etcdPolicyAllowList": "Allow List (execute without confirmation)",
+    "etcdPolicyDenyList": "Deny List (always reject)",
+    "etcdPolicyHint": "etcd operations not listed will require user confirmation. Rules support * wildcards; broad patterns such as * may allow high-risk operations or deny many operations, so configure them carefully.",
+    "etcdPolicyPlaceholder": "Add etcd operation rules, e.g. get /app/*",
+    "policyTestEtcdPlaceholder": "Type an etcd operation to test, e.g. get /app/config",
     "k8sKubeconfigProvided": "Kubeconfig provided",
     "k8sNamespace": "Namespace",
     "k8sContext": "Context",
@@ -344,6 +373,16 @@
     "serialRefreshPorts": "Refresh Ports",
     "serialNoPortsDetected": "No ports detected",
     "serialManualInput": "Enter path manually",
+    "localTitle": "Local Terminal",
+    "localShell": "Shell",
+    "localShellPreset": "Detected shells…",
+    "localShellPlaceholder": "e.g. /bin/zsh, pwsh.exe",
+    "localDefaultShell": "System default",
+    "localArgs": "Arguments",
+    "localArgsPlaceholder": "e.g. -l --login",
+    "localCwd": "Working Directory",
+    "localCwdPlaceholder": "e.g. ~ or /home/user",
+    "typeLocal": "Local Terminal",
     "k8sVersion": "Version",
     "k8sPlatform": "Platform",
     "k8sNodes": "Nodes",
@@ -448,20 +487,62 @@
       "deleteConfirmTitle": "Confirm Delete Policy Group",
       "deleteConfirm": "Delete policy group \"{{name}}\"? This action cannot be undone.",
       "builtin": {
-        "linux-readonly": { "name": "Linux Read-Only", "desc": "Common Linux read-only commands" },
-        "k8s-readonly": { "name": "Kubernetes Read-Only", "desc": "Kubernetes read-only commands" },
-        "k8s-dangerous-deny": { "name": "Kubernetes Dangerous Deny", "desc": "Deny dangerous Kubernetes commands" },
-        "docker-readonly": { "name": "Docker Read-Only", "desc": "Docker read-only commands" },
-        "dangerous-deny": { "name": "Dangerous Command Deny", "desc": "Deny dangerous system commands" },
-        "sql-readonly": { "name": "SQL Read-Only", "desc": "Allow query-only SQL statements" },
-        "sql-dangerous-deny": { "name": "SQL Dangerous Deny", "desc": "Deny dangerous SQL operations" },
-        "redis-readonly": { "name": "Redis Read-Only", "desc": "Allow Redis read-only commands" },
-        "redis-dangerous-deny": { "name": "Redis Dangerous Deny", "desc": "Deny dangerous Redis commands" },
+        "linux-readonly": {
+          "name": "Linux Read-Only",
+          "desc": "Common Linux read-only commands"
+        },
+        "k8s-readonly": {
+          "name": "Kubernetes Read-Only",
+          "desc": "Kubernetes read-only commands"
+        },
+        "k8s-dangerous-deny": {
+          "name": "Kubernetes Dangerous Deny",
+          "desc": "Deny dangerous Kubernetes commands"
+        },
+        "docker-readonly": {
+          "name": "Docker Read-Only",
+          "desc": "Docker read-only commands"
+        },
+        "dangerous-deny": {
+          "name": "Dangerous Command Deny",
+          "desc": "Deny dangerous system commands"
+        },
+        "sql-readonly": {
+          "name": "SQL Read-Only",
+          "desc": "Allow query-only SQL statements"
+        },
+        "sql-dangerous-deny": {
+          "name": "SQL Dangerous Deny",
+          "desc": "Deny dangerous SQL operations"
+        },
+        "redis-readonly": {
+          "name": "Redis Read-Only",
+          "desc": "Allow Redis read-only commands"
+        },
+        "redis-dangerous-deny": {
+          "name": "Redis Dangerous Deny",
+          "desc": "Deny dangerous Redis commands"
+        },
+        "mongo-readonly": {
+          "name": "MongoDB Read-Only",
+          "desc": "Allow MongoDB read-only operations"
+        },
+        "mongo-readwrite": {
+          "name": "MongoDB Read-Write",
+          "desc": "Allow MongoDB CRUD operations"
+        },
+        "mongo-dangerous-deny": {
+          "name": "MongoDB Dangerous Deny",
+          "desc": "Deny dangerous MongoDB operations"
+        },
         "kafka-metadata-readonly": {
           "name": "Kafka Metadata Read-Only",
           "desc": "Allow cluster, broker, topic, and consumer group metadata reads"
         },
-        "kafka-message-read": { "name": "Kafka Message Read", "desc": "Allow reading message payloads" },
+        "kafka-message-read": {
+          "name": "Kafka Message Read",
+          "desc": "Allow reading message payloads"
+        },
         "kafka-schema-readonly": {
           "name": "Schema Registry Read-Only",
           "desc": "Allow reading Schema Registry metadata and schemas"
@@ -474,10 +555,21 @@
           "name": "Kafka Operator",
           "desc": "Allow topic, partition, and consumer group offset management"
         },
-        "kafka-security-admin": { "name": "Kafka Security Admin", "desc": "Allow Kafka ACL management" },
+        "kafka-security-admin": {
+          "name": "Kafka Security Admin",
+          "desc": "Allow Kafka ACL management"
+        },
         "kafka-dangerous-deny": {
           "name": "Kafka Dangerous Deny",
           "desc": "Deny destructive and security-sensitive Kafka operations"
+        },
+        "etcd-readonly": {
+          "name": "etcd Read-Only",
+          "desc": "Allow etcd read-only operations"
+        },
+        "etcd-dangerous-deny": {
+          "name": "etcd Dangerous Deny",
+          "desc": "Deny dangerous etcd operations"
         }
       }
     }
@@ -915,6 +1007,8 @@
     "recording": "Press shortcut...",
     "reset": "Reset",
     "resetAll": "Reset All",
+    "swapCmdCtrl": "⌘ ⇄ ⌃",
+    "swapCmdCtrlDesc": "Swap ⌘ and ⌃ on every shortcut; click again to swap back",
     "tab.1": "Switch to Tab 1",
     "tab.2": "Switch to Tab 2",
     "tab.3": "Switch to Tab 3",
@@ -1052,6 +1146,136 @@
       "brightWhite": "Bright White"
     }
   },
+  "externalEdit": {
+    "saving": "Auto-saving…",
+    "panel": {
+      "title": "External Edit",
+      "conflicts": "Conflicting Files",
+      "errors": "Recoverable Files",
+      "recoveries": "Recovery Entries",
+      "attentionCount": "{{count}} pending",
+      "remoteSnapshotReady": "remote snapshot ready",
+      "currentDraft": "Current Conflict Draft",
+      "retainedDraft": "Retained Draft",
+      "rereadDraft": "Reread Draft",
+      "rereadDraftHint": "Further edits keep using the current save/compare/conflict chain.",
+      "rereadBaselineHint": "After reading the remote version, edits will use that remote version as the baseline.",
+      "autoSavePending": "auto-save pending",
+      "autoSaveRunning": "auto-save running",
+      "recreateReadyHint": "The current active draft can recreate the missing remote file.",
+      "recreateUnavailableState": "Only available when the current active draft is in the Remote Missing state.",
+      "recreateUnavailableBusy": "Finish the current save first before recreating the remote file.",
+      "recreateUnavailableActiveDraft": "A newer active draft already exists. Continue from that draft instead."
+    },
+    "actions": {
+      "open": "Edit Externally",
+      "sync": "Save to Remote",
+      "refresh": "Refresh Remote State",
+      "compare": "Compare",
+      "acceptRemote": "Accept Remote",
+      "reread": "Read Remote Version",
+      "overwrite": "Overwrite Remote",
+      "saveAgain": "Recreate Remote File",
+      "viewError": "View Error",
+      "viewRecovery": "View Recovery",
+      "reopenLocal": "Reopen Local Draft",
+      "continueEdit": "Continue Editing",
+      "merge": "Three-way Merge",
+      "saveMerge": "Save Merged Draft",
+      "hideRecord": "Close Record (Keep Local Draft)",
+      "deleteLocal": "Delete Record and Local Draft"
+    },
+    "pending": {
+      "entry": "External Edit Pending",
+      "title": "External Edit Pending Files",
+      "description": "Conflicts, errors, and recovery files are handled here. Closing this dialog does not drop records.",
+      "empty": "No pending external edit files."
+    },
+    "state": {
+      "clean": "Synced",
+      "dirty": "Local Changes",
+      "conflict": "Remote Changed",
+      "remote_missing": "Remote Missing",
+      "stale": "Conflict Copy",
+      "expired": "Session Expired"
+    },
+    "recordState": {
+      "active": "Editing",
+      "conflict": "Conflict Pending",
+      "error": "Needs Recovery",
+      "completed": "Completed",
+      "abandoned": "Hidden"
+    },
+    "conflict": {
+      "remoteChangedTitle": "Remote File Changed",
+      "remoteMissingTitle": "Remote File Missing"
+    },
+    "error": {
+      "title": "Sync Failure Details",
+      "summaryLabel": "Summary",
+      "stepLabel": "Failed Step",
+      "suggestionLabel": "Suggested Action",
+      "safeActionFailed": "External edit action failed. Review the pending entry and retry."
+    },
+    "recovery": {
+      "title": "Recover External Edit",
+      "summary": "A local draft from the previous app session is available for recovery.",
+      "description": "Recovery only reopens the local draft and never uploads automatically. Save manually after checking the content."
+    },
+    "merge": {
+      "title": "Three-way Merge",
+      "localDraft": "Local Draft (read-only)",
+      "finalDraft": "Final Draft (editable)",
+      "remoteDraft": "Remote Version (read-only)",
+      "helper": "Local on the left, final draft in the middle, remote on the right. Remote freshness is checked again before saving.",
+      "changelist": "Conflict Files",
+      "readOnlySide": "Read-only",
+      "editableCenter": "Editable",
+      "status": "Three-way merge workbench",
+      "localCenterRemote": "Left local / center final / right remote",
+      "previous": "Previous conflict",
+      "next": "Next conflict",
+      "closeDirtyTitle": "Discard unsaved merge draft?",
+      "closeDirtyDesc": "Closing keeps the conflict record, but the unsaved final draft edits in this dialog will be lost.",
+      "closeDirtyConfirm": "Discard and Close"
+    },
+    "compare": {
+      "title": "Read-only Diff",
+      "localDraft": "Local Draft",
+      "remoteSnapshot": "Remote Snapshot",
+      "readOnly": "Read-only",
+      "projectView": "Conflict Files",
+      "status": "Read-only diff workbench",
+      "remoteLeftLocalRight": "Left remote / right local",
+      "previous": "Previous difference",
+      "next": "Next difference",
+      "loadFailed": "Diff view failed to load",
+      "helper": "Remote on the left, local on the right, with line numbers and synced scrolling for inspection."
+    },
+    "settings": {
+      "tab": "External Edit",
+      "title": "External Editors",
+      "desc": "Configure the default editor, local workspace, and custom editor entries.",
+      "defaultEditor": "Default Editor",
+      "workspaceRoot": "Workspace Root",
+      "cleanupRetentionDays": "Cleanup Retention Days",
+      "cleanupRetentionDaysHint": "Defaults to 7 days, range 1-365. Used to clean up non-active drafts and backup history copies.",
+      "maxReadFileSizeMB": "Max Read Size (MB)",
+      "maxReadFileSizeMBHint": "Defaults to 10 MB, range 1-1024 MB. Full-file reads above this limit are rejected and should be adjusted in Settings > External Edit.",
+      "customEditors": "Custom Editors",
+      "addEditor": "Add Custom Editor",
+      "addEditorTitle": "Add Custom Editor",
+      "editEditorTitle": "Edit Custom Editor",
+      "editorDialogDesc": "Edit one custom editor entry at a time, then save the whole settings snapshot.",
+      "editorPath": "Editor Path",
+      "editorArgs": "Launch Args",
+      "emptyCustomEditors": "No custom editors yet.",
+      "defaultBadge": "Default",
+      "noArgs": "No launch args",
+      "editorUnavailable": "Unavailable until the executable path is fixed",
+      "saved": "External edit settings saved"
+    }
+  },
   "integration": {
     "title": "Integration",
     "desc": "CLI tool and AI plugin integration",
@@ -1157,7 +1381,6 @@
     "batchDescription": "The following {{count}} operations require your approval",
     "alwaysAllow": "Always Allow",
     "approve": "Approve",
-    "allow": "Allow",
     "scopeAll": "All Assets"
   },
   "audit": {
@@ -1233,6 +1456,7 @@
     "loadError": "Failed to load",
     "retry": "Retry",
     "refresh": "Refresh",
+    "newFolder": "New Folder",
     "openFolder": "Open",
     "dropToUpload": "Drop files here to upload",
     "transfers": "Transfers",
@@ -1240,6 +1464,76 @@
     "selectDownloadFile": "Select file to download",
     "deleteConfirmTitle": "Confirm Delete",
     "deleteConfirmDesc": "Are you sure you want to delete \"{{name}}\"? This cannot be undone.",
+    "deleteMultiDesc": "Permanently delete {{count}} selected items?",
+    "newFile": "New File",
+    "folderNamePlaceholder": "folder-name",
+    "filenamePlaceholder": "file-name.txt",
+    "ready": "Ready",
+    "selectedItems": "Selected {{count}} items ({{size}})",
+    "clipboardCopy": "Clipboard: copy {{count}} item(s)",
+    "clipboardCut": "Clipboard: cut {{count}} item(s)",
+    "currentPathCopied": "Current path copied",
+    "filePathCopied": "File path copied",
+    "menu": {
+      "openTerminal": "Open in Terminal",
+      "downloadFolder": "Download Folder",
+      "downloadFile": "Download File",
+      "downloadSelected": "Download Selected ({{count}} items)",
+      "cut": "Cut",
+      "cutSelected": "Cut Selected ({{count}} items)",
+      "copy": "Copy",
+      "copySelected": "Copy Selected ({{count}} items)",
+      "copyFilePath": "Copy File Path",
+      "copySelectedFilePaths": "Copy Selected File Paths ({{count}} items)",
+      "paste": "Paste",
+      "rename": "Rename",
+      "permission": "Permission",
+      "properties": "Properties",
+      "delete": "Delete",
+      "deleteSelected": "Delete Selected ({{count}} items)",
+      "newFile": "New File",
+      "copyCurrentPath": "Copy Current Path"
+    },
+    "permission": {
+      "title": "Permission & Ownership",
+      "matrix": "Linux Permission Matrix",
+      "read": "Read",
+      "write": "Write",
+      "execute": "Execute",
+      "owner": "Owner",
+      "group": "Group",
+      "others": "Others",
+      "octalMode": "Octal Mode",
+      "presetWebStatic": "Web static",
+      "presetDirectory": "Directory",
+      "presetPrivateKey": "Private key",
+      "presetExecutable": "Executable",
+      "chown": "Chown",
+      "ownerUser": "Owner User",
+      "ownerUserPlaceholder": "www or root",
+      "ownerGroup": "Owner Group",
+      "ownerGroupPlaceholder": "www-data or root",
+      "recursive": "Recursive",
+      "recursiveAll": "Apply to all files and directories",
+      "recursiveFiles": "Only files",
+      "recursiveDirs": "Only directories"
+    },
+    "properties": {
+      "title": "Properties",
+      "loading": "Loading...",
+      "path": "Path",
+      "type": "Type",
+      "typeFolder": "Folder",
+      "typeFile": "File",
+      "size": "Size",
+      "sizeBytes": "{{display}} ({{bytes}} bytes)",
+      "children": "Children",
+      "mode": "Mode",
+      "owner": "Owner UID",
+      "group": "Owner GID",
+      "modified": "Modified",
+      "approximate": "(approx)"
+    },
     "sync": {
       "panelFromTerminal": "Sync file manager to terminal directory",
       "terminalFromPanel": "Change terminal directory to current file manager directory",
@@ -1821,6 +2115,10 @@
     "designTableColumnNameRequired": "Column name is required",
     "designTableColumnTypeRequired": "Column type is required",
     "designTableDuplicateColumn": "Duplicate column name: {{name}}",
+    "alterSqliteLimitations": "SQLite does not support changing the type, default, nullability or comments of existing columns or tables; you can rename, add, or drop columns.",
+    "alterSqliteUnsupportedTableComment": "SQLite does not support table comments",
+    "alterMssqlLimitations": "SQL Server does not support editing the default value of existing columns or table/column comments here; you can rename, add, drop columns and change their type or nullability.",
+    "alterMssqlUnsupportedTableComment": "SQL Server table comments use extended properties and are not editable here",
     "alterActionAdd": "Add Column",
     "alterActionType": "Change Type",
     "alterActionDrop": "Drop Column",
@@ -2069,6 +2367,102 @@
       "noMatch": "No matching snippets",
       "empty": "No prompt snippets yet",
       "openManager": "Create in Snippets page"
+    }
+  },
+  "etcd": {
+    "form": {
+      "endpoints": "Endpoints",
+      "endpointsHint": "At least 1 host:port, one per line",
+      "addEndpoint": "Add endpoint",
+      "tlsSection": "TLS / mTLS",
+      "advancedSection": "Advanced",
+      "dialTimeout": "Dial timeout (s)",
+      "commandTimeout": "Command timeout (s)",
+      "test": "Test connection",
+      "tlsServerName": "Server name",
+      "tlsCAFile": "CA certificate path",
+      "tlsCertFile": "Client certificate path",
+      "tlsKeyFile": "Client private key path",
+      "tlsInsecure": "Skip certificate verification"
+    },
+    "tree": {
+      "title": "Keyspace",
+      "filterPlaceholder": "Filter key",
+      "truncated": "+{{count}} hidden, limit={{limit}}",
+      "loadFailed": "Failed to load keyspace"
+    },
+    "query": {
+      "placeholder": "get /config --prefix",
+      "templates": "Templates",
+      "execute": "Execute",
+      "history": "History",
+      "deleteConfirmTitle": "Confirm delete",
+      "deleteConfirmBody": "Will delete key: {{key}}",
+      "deletePrefixWarning": "Bulk delete via --prefix. Please confirm.",
+      "execConfirmTitle": "Confirm destructive command",
+      "execConfirmBody": "About to run: {{command}}\nVerify the command, key range and --prefix flag before confirming.",
+      "execSuccess": "Success",
+      "execFailed": "Failed",
+      "elapsed": "{{ms}}ms",
+      "noResult": "No results yet. Enter a command and execute."
+    },
+    "detail": {
+      "selectKey": "Select a key on the left to view details",
+      "loading": "Loading…",
+      "empty": "No data",
+      "metaModRev": "MOD REV",
+      "metaCreateRev": "CREATE REV",
+      "metaVersion": "VERSION",
+      "metaLease": "LEASE",
+      "metaSize": "SIZE",
+      "metaValueType": "VALUE TYPE",
+      "metaLeaseNone": "none",
+      "valueLabel": "VALUE",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saveSuccess": "Saved",
+      "saveFailed": "Save failed",
+      "saveConfirmTitle": "Overwrite key",
+      "saveConfirmBody": "Will overwrite key: {{key}}",
+      "formatRaw": "Raw",
+      "formatJson": "JSON",
+      "formatYaml": "YAML",
+      "notJson": "(not JSON)",
+      "notYaml": "(YAML conversion failed)",
+      "copyKey": "Copy KEY",
+      "copyValue": "Copy raw value",
+      "delete": "Delete",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Copy failed",
+      "deleteSuccess": "Deleted key: {{key}}",
+      "deleteFailed": "Delete failed",
+      "history": "History",
+      "historyAt": "Viewing revision {{rev}}",
+      "historyLoading": "Loading history…",
+      "historyEmpty": "No earlier revisions (may be compacted)",
+      "historyLatest": "Latest",
+      "historyItem": "rev {{rev}} · ver {{ver}}",
+      "historyFailed": "Failed to load history",
+      "historyCleared": "Back to current",
+      "contentTypeJson": "application/json",
+      "contentTypeText": "text/plain",
+      "contentTypeEmpty": "(empty)"
+    },
+    "cluster": {
+      "healthy": "Healthy",
+      "unhealthy": "Unhealthy",
+      "unknown": "Unknown",
+      "endpoints": "{{count}} endpoint(s)",
+      "leader": "leader",
+      "noLeader": "no leader",
+      "refresh": "Refresh cluster status",
+      "loadFailed": "Failed to load cluster info"
+    },
+    "error": {
+      "endpointsRequired": "At least one endpoint required",
+      "compactionRev": "Revision compacted; oldest available: {{rev}}",
+      "connFailed": "Failed to connect to etcd"
     }
   }
 }

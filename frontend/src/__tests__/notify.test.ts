@@ -1,0 +1,21 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { toast } from "sonner";
+import { notifyCopied, notifySuccess } from "@/lib/notify";
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn() },
+}));
+
+describe("notify helpers", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("notifyCopied 顶部居中且 1s 一闪而过", () => {
+    notifyCopied("已复制");
+    expect(toast.success).toHaveBeenCalledWith("已复制", { position: "top-center", duration: 1000 });
+  });
+
+  it("notifySuccess 顶部居中，沿用默认停留时长", () => {
+    notifySuccess("已保存");
+    expect(toast.success).toHaveBeenCalledWith("已保存", { position: "top-center" });
+  });
+});

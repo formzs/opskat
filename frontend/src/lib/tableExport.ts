@@ -1,4 +1,4 @@
-import { quoteIdent, quoteQualifiedIdent, quoteTableRef, sqlQuote } from "./tableSql";
+import { buildPagedSelect, quoteIdent, quoteQualifiedIdent, quoteTableRef, sqlQuote } from "./tableSql";
 
 type TableRow = Record<string, unknown>;
 export type TableExportFormat = "csv" | "tsv" | "sql";
@@ -216,7 +216,9 @@ export function toUpdateSql(
     })
     .join(" AND ");
 
-  if (driver === "postgresql") return `UPDATE ${quotedTable} SET ${setSql} WHERE ${whereSql};`;
+  if (driver === "postgresql" || driver === "sqlite") return `UPDATE ${quotedTable} SET ${setSql} WHERE ${whereSql};`;
+  // MSSQL 无 LIMIT，用 UPDATE TOP (1) 限制单行更新（对齐 MySQL 的 LIMIT 1 安全语义）。
+  if (driver === "mssql") return `UPDATE TOP (1) ${quotedTable} SET ${setSql} WHERE ${whereSql};`;
   return `UPDATE ${quotedTable} SET ${setSql} WHERE ${whereSql} LIMIT 1;`;
 }
 
@@ -259,6 +261,16 @@ export function buildTableExportSelectSql({
       : orderByClause.trim();
   const wherePart = where ? ` WHERE ${where}` : "";
   const orderByPart = orderBy ? ` ORDER BY ${orderBy}` : "";
+  if (scope === "page" && driver === "mssql") {
+    return buildPagedSelect({
+      tableRef: tableName,
+      wherePart,
+      orderByExpr: orderBy,
+      pageSize,
+      offset: page * pageSize,
+      driver,
+    });
+  }
   const pagePart = scope === "page" ? ` LIMIT ${pageSize} OFFSET ${page * pageSize}` : "";
   return `SELECT * FROM ${tableName}${wherePart}${orderByPart}${pagePart}`;
 }

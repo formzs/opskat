@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button, Input, Label, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@opskat/ui";
 import { TerminalTheme } from "@/data/terminalThemes";
 import { toast } from "sonner";
+import { notifyCopied, notifySuccess } from "@/lib/notify";
 
 interface TerminalThemeEditorProps {
   open: boolean;
@@ -146,7 +147,7 @@ export function TerminalThemeEditor({ open, onOpenChange, theme, onSave }: Termi
     }
     const json = JSON.stringify(result, null, 2);
     navigator.clipboard.writeText(json);
-    toast.success(t("terminal.exportedToClipboard"));
+    notifyCopied(t("terminal.exportedToClipboard"));
   };
 
   const handleImport = async () => {
@@ -158,7 +159,7 @@ export function TerminalThemeEditor({ open, onOpenChange, theme, onSave }: Termi
         return;
       }
       updateDraft({ name: parsed.name || "", colors: getThemeColors(parsed) });
-      toast.success(t("terminal.importedFromClipboard"));
+      notifySuccess(t("terminal.importedFromClipboard"));
     } catch {
       toast.error(t("terminal.invalidThemeJson"));
     }

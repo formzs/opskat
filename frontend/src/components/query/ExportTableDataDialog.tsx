@@ -24,6 +24,7 @@ import {
 } from "@opskat/ui";
 import { Check, ChevronDown, Download, ExternalLink, FolderOpen, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { notifySuccess } from "@/lib/notify";
 import { ExecuteSQL } from "../../../wailsjs/go/query/Query";
 import { OpenDirectory } from "../../../wailsjs/go/system/System";
 import { SelectTableExportFile, WriteTableExportFile } from "../../../wailsjs/go/query/Query";
@@ -184,7 +185,8 @@ export function ExportTableDataDialog({
   }, [database, meta.extension, table]);
   const estimatedRows = scope === "all" ? (totalRows ?? rows.length) : rows.length;
   const canStart = !!assetId && selectedColumns.length > 0 && !!filePath && !exporting;
-  const tableName = driver === "postgresql" ? table : `${database}.${table}`;
+  // MSSQL 与 PG 一样按 schema.table 引用，不带 database 前缀（避免被当成 schema.object）
+  const tableName = driver === "postgresql" || driver === "mssql" ? table : `${database}.${table}`;
 
   const appendLog = useCallback((line: string) => {
     setLogLines((prev) => [...prev, line]);
@@ -311,7 +313,7 @@ export function ExportTableDataDialog({
       appendLog(`[EXP] Processed ${processedRows} row(s) in ${elapsed}s`);
       appendLog("[EXP] Finished successfully");
       setCompleted(true);
-      toast.success(t("query.exportSuccessDetailed", { count: processedRows }));
+      notifySuccess(t("query.exportSuccessDetailed", { count: processedRows }));
     } catch (e) {
       appendLog(`[EXP] Failed - ${String(e)}`);
       toast.error(String(e));
