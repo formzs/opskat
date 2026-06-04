@@ -48,7 +48,7 @@ export function getOrCreateTerminal(
   container.style.height = "100%";
   container.style.width = "100%";
 
-  const resolvedFontFamily = withTerminalFontFallback(init.fontFamily);
+  const resolvedFontFamily = withTerminalFontFallback(init.fontFamily || "");
 
   const term = new XTerminal({
     cursorBlink: true,

@@ -67,10 +67,6 @@ vi.mock("../../wailsjs/go/local/Local", () => ({
   SplitLocal: vi.fn().mockResolvedValue("split-local"),
 }));
 
-vi.mock("../../wailsjs/go/serial/Serial", () => ({
-  WriteSerial: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock("@xterm/xterm", () => {
   class MockTerminal {
     loadAddon = vi.fn();
