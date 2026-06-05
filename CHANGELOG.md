@@ -1,3 +1,24 @@
+<a name="1.8.0"></a>
+
+## 1.8.0 (2026-06-04)
+
+本次版本新增本地终端资产（local），可在应用内直接打开本机 shell / PowerShell / WSL 终端并支持分屏；资产类型选择器升级为带图标、分组与搜索的下拉并统一类型清单；macOS 快捷键新增 Ctrl 支持与 ⌘⇄⌃ 一键切换；同时更新了 macOS/Windows 应用图标，并将复制等成功提示移到顶部居中。
+
+### 🚀 主要新功能
+
+- 💥 新增本地终端资产 (local)：在应用内直接打开本机 shell / PowerShell / WSL 终端，支持分屏（新开同配置 shell）并隐藏 Windows 终端黑窗 [#70](https://github.com/opskat/opskat/issues/70) ([#140](https://github.com/opskat/opskat/pull/140)) (by @CodFrm)
+- ✨ 资产类型选择器升级为图标 + 分组 + 搜索的下拉，统一类型清单 ([#142](https://github.com/opskat/opskat/pull/142)) (by @CodFrm)
+- ✨ macOS 快捷键支持 Ctrl，并提供 ⌘⇄⌃ 一键切换 [#138](https://github.com/opskat/opskat/issues/138) ([#139](https://github.com/opskat/opskat/pull/139)) (by @CodFrm)
+
+### 🐛 Bug 修复
+
+- 🐛 修复资产类型过滤下拉滚动高度 (by @CodFrm)
+
+### 🎨 UI 改进
+
+- 🎨 更新 macOS / Windows 应用图标（Windows 图标填满图块） [#134](https://github.com/opskat/opskat/issues/134) (by @CodFrm)
+- 🎨 复制等成功提示移到顶部居中并缩短停留时间 [#135](https://github.com/opskat/opskat/issues/135) (by @CodFrm)
+
 <a name="1.7.0"></a>
 
 ## 1.7.0 (2026-05-30)
