@@ -11,11 +11,25 @@ const hoisted = vi.hoisted(() => {
   const webglAddonDisposeSpy = vi.fn();
   const webglContextLossDisposeSpy = vi.fn();
   const webglClearTextureAtlasSpy = vi.fn();
+  const webLinksAddonCtor = vi.fn();
+  const webLinksAddonDisposeSpy = vi.fn();
   const setWebglEnabledSpy = vi.fn();
   const reportWebglFailureSpy = vi.fn();
+  const browserOpenURLSpy = vi.fn();
+  const linkProviderDisposeSpy = vi.fn();
+  const attachUrlHighlighterSpy = vi.fn();
+  const urlHighlighterDisposeSpy = vi.fn();
   const disposeOrder: string[] = [];
-  const state: { capturedOnKey: ((e: { key: string }) => void) | null } = {
+  const state: {
+    capturedOnKey: ((e: { key: string }) => void) | null;
+    linkProvider: {
+      provideLinks: (bufferLineNumber: number, callback: (links: unknown[] | undefined) => void) => void;
+    } | null;
+    lines: Map<number, string>;
+  } = {
     capturedOnKey: null,
+    linkProvider: null,
+    lines: new Map(),
   };
   return {
     eventHandlers,
@@ -28,8 +42,14 @@ const hoisted = vi.hoisted(() => {
     webglAddonDisposeSpy,
     webglContextLossDisposeSpy,
     webglClearTextureAtlasSpy,
+    webLinksAddonCtor,
+    webLinksAddonDisposeSpy,
     setWebglEnabledSpy,
     reportWebglFailureSpy,
+    browserOpenURLSpy,
+    linkProviderDisposeSpy,
+    attachUrlHighlighterSpy,
+    urlHighlighterDisposeSpy,
     disposeOrder,
     state,
   };
@@ -42,6 +62,7 @@ vi.mock("../../wailsjs/runtime/runtime", () => ({
   EventsOff: (event: string) => {
     hoisted.eventHandlers.delete(event);
   },
+  BrowserOpenURL: hoisted.browserOpenURLSpy,
 }));
 
 vi.mock("../../wailsjs/go/ssh/SSH", () => ({
@@ -69,7 +90,22 @@ vi.mock("../../wailsjs/go/local/Local", () => ({
 
 vi.mock("@xterm/xterm", () => {
   class MockTerminal {
-    loadAddon = vi.fn();
+    rows = 24;
+    buffer = {
+      active: {
+        baseY: 0,
+        cursorY: 0,
+        viewportY: 0,
+        length: 24,
+        getLine: (lineNumber: number) => {
+          const line = hoisted.state.lines.get(lineNumber);
+          return line === undefined ? undefined : { translateToString: () => line };
+        },
+      },
+    };
+    loadAddon = vi.fn((addon: { activate?: (terminal: MockTerminal) => void }) => {
+      addon.activate?.(this);
+    });
     open = vi.fn();
     write = hoisted.writeSpy;
     onData = vi.fn(() => ({ dispose: vi.fn() }));
@@ -82,12 +118,16 @@ vi.mock("@xterm/xterm", () => {
     attachCustomKeyEventHandler = vi.fn();
     textarea = { addEventListener: vi.fn(), removeEventListener: vi.fn() } as unknown as HTMLTextAreaElement;
     options = { screenReaderMode: false };
+    registerLinkProvider = vi.fn((provider) => {
+      hoisted.state.linkProvider = provider;
+      return { dispose: hoisted.linkProviderDisposeSpy };
+    });
     dispose = vi.fn(() => {
       hoisted.disposeOrder.push("term");
       hoisted.disposeSpy();
     });
-    constructor() {
-      hoisted.terminalCtor();
+    constructor(options?: unknown) {
+      hoisted.terminalCtor(options);
     }
   }
   return { Terminal: MockTerminal };
@@ -107,6 +147,44 @@ vi.mock("@/components/terminal/terminalInputBridge", () => ({
 
 vi.mock("@xterm/addon-fit", () => ({ FitAddon: class {} }));
 vi.mock("@xterm/addon-search", () => ({ SearchAddon: class {} }));
+vi.mock("@xterm/addon-web-links", () => {
+  class MockWebLinksAddon {
+    private linkProviderDispose: { dispose: () => void } | undefined;
+    constructor(private readonly handler: (event: MouseEvent, uri: string) => void) {
+      hoisted.webLinksAddonCtor();
+    }
+    activate = vi.fn((terminal: { registerLinkProvider: (provider: unknown) => { dispose: () => void } }) => {
+      this.linkProviderDispose = terminal.registerLinkProvider({
+        provideLinks: (bufferLineNumber: number, callback: (links: unknown[] | undefined) => void) => {
+          const line = hoisted.state.lines.get(bufferLineNumber - 1);
+          const match = line?.match(/https?:\/\/[^\s<>"'`]+/i);
+          if (!match) {
+            callback(undefined);
+            return;
+          }
+          const rawUrl = match[0];
+          const url = rawUrl.replace(/[),.;!?\]}]+$/, "");
+          callback([
+            {
+              text: url,
+              range: {
+                start: { x: (match.index ?? 0) + 1, y: bufferLineNumber },
+                end: { x: (match.index ?? 0) + url.length, y: bufferLineNumber },
+              },
+              activate: (event: MouseEvent | undefined, text: string) => this.handler(event as MouseEvent, text),
+            },
+          ]);
+        },
+      });
+    });
+    dispose = vi.fn(() => {
+      this.linkProviderDispose?.dispose();
+      hoisted.disposeOrder.push("webLinks");
+      hoisted.webLinksAddonDisposeSpy();
+    });
+  }
+  return { WebLinksAddon: MockWebLinksAddon };
+});
 vi.mock("@xterm/addon-webgl", () => {
   class MockWebglAddon {
     constructor() {
@@ -129,11 +207,23 @@ vi.mock("@xterm/addon-webgl", () => {
 });
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
+vi.mock("@/components/terminal/terminalUrlHighlighter", () => ({
+  attachTerminalUrlHighlighter: (...args: unknown[]) => {
+    hoisted.attachUrlHighlighterSpy(...args);
+    return {
+      setEnabled: vi.fn(),
+      setColor: vi.fn(),
+      dispose: () => {
+        hoisted.disposeOrder.push("urlHighlighter");
+        hoisted.urlHighlighterDisposeSpy();
+      },
+    };
+  },
+}));
+
 vi.mock("@/stores/terminalStore", async (importActual) => {
   const actual = await importActual<typeof import("@/stores/terminalStore")>();
   return {
-    // 复用真实的 TRANSPORTS 表与 transport 网关函数（纯函数，无副作用），
-    // useTerminalStore 仍替换为最小桩，避免拉起整个 store 的副作用。
     TRANSPORTS: actual.TRANSPORTS,
     transportForAsset: actual.transportForAsset,
     inferTransportFromSessionId: actual.inferTransportFromSessionId,
@@ -173,6 +263,9 @@ vi.mock("@/components/terminal/terminalImageProtocol", () => ({
     clearAllImages() {}
     dispose() {}
     setEnabled() {}
+    attachOverlay() {}
+    detachOverlay() {}
+    requestRender() {}
   },
 }));
 vi.mock("@/i18n", () => ({
@@ -181,6 +274,12 @@ vi.mock("@/i18n", () => ({
 
 import { getOrCreateTerminal, disposeTerminal } from "@/components/terminal/terminalRegistry";
 import { TRANSPORTS, transportForAsset, inferTransportFromSessionId } from "@/stores/terminalStore";
+
+interface TestTerminalLink {
+  text: string;
+  range: { start: { x: number; y: number }; end: { x: number; y: number } };
+  activate: (event: MouseEvent | undefined, text: string) => void;
+}
 
 describe("TRANSPORTS", () => {
   it("TRANSPORTS 覆盖 ssh/serial/local 且字段齐全", () => {
@@ -192,14 +291,11 @@ describe("TRANSPORTS", () => {
       expect(typeof t.connectAsync).toBe("function");
       expect(typeof t.disconnect).toBe("function");
       expect(typeof t.canSplit).toBe("boolean");
-      // canSplit 与 split 必须一致:可分屏的 transport 必须提供 split 实现,反之不提供。
       expect(typeof t.split === "function").toBe(t.canSplit);
     }
-    // ssh 复用连接、local 再起一个同 shell 的 PTY,二者均可分屏;serial 物理端口不可复用。
     expect(TRANSPORTS.ssh.canSplit).toBe(true);
     expect(TRANSPORTS.serial.canSplit).toBe(false);
     expect(TRANSPORTS.local.canSplit).toBe(true);
-    // 只有 ssh 同步 cwd / 暴露 SFTP，serial/local 没有目录能力。
     expect(TRANSPORTS.ssh.hasDirectorySync).toBe(true);
     expect(TRANSPORTS.serial.hasDirectorySync).toBe(false);
     expect(TRANSPORTS.local.hasDirectorySync).toBe(false);
@@ -209,7 +305,7 @@ describe("TRANSPORTS", () => {
     expect(transportForAsset("serial")).toBe("serial");
     expect(transportForAsset("local")).toBe("local");
     expect(transportForAsset("ssh")).toBe("ssh");
-    expect(transportForAsset("k8s")).toBe("ssh"); // unknown → ssh default
+    expect(transportForAsset("k8s")).toBe("ssh");
   });
 
   it("inferTransportFromSessionId maps session id prefix → transport", () => {
@@ -223,6 +319,8 @@ describe("terminalRegistry", () => {
   beforeEach(() => {
     hoisted.eventHandlers.clear();
     hoisted.state.capturedOnKey = null;
+    hoisted.state.linkProvider = null;
+    hoisted.state.lines.clear();
     hoisted.writeSpy.mockClear();
     hoisted.disposeSpy.mockClear();
     hoisted.reconnectBySessionMock.mockClear();
@@ -232,8 +330,14 @@ describe("terminalRegistry", () => {
     hoisted.webglAddonDisposeSpy.mockClear();
     hoisted.webglContextLossDisposeSpy.mockClear();
     hoisted.webglClearTextureAtlasSpy.mockClear();
+    hoisted.webLinksAddonCtor.mockClear();
+    hoisted.webLinksAddonDisposeSpy.mockClear();
     hoisted.setWebglEnabledSpy.mockClear();
     hoisted.reportWebglFailureSpy.mockClear();
+    hoisted.browserOpenURLSpy.mockClear();
+    hoisted.linkProviderDisposeSpy.mockClear();
+    hoisted.attachUrlHighlighterSpy.mockClear();
+    hoisted.urlHighlighterDisposeSpy.mockClear();
     hoisted.disposeOrder.length = 0;
   });
 
@@ -255,10 +359,78 @@ describe("terminalRegistry", () => {
     disposeTerminal("sess-2");
   });
 
-  it("disposes bridge and webgl before term", () => {
+  it("ignores non-Enter keys after close", () => {
+    getOrCreateTerminal("sess-3", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    hoisted.eventHandlers.get("ssh:closed:sess-3")?.();
+    hoisted.state.capturedOnKey?.({ key: "a" });
+    hoisted.state.capturedOnKey?.({ key: "\n" });
+    expect(hoisted.reconnectBySessionMock).not.toHaveBeenCalled();
+    disposeTerminal("sess-3");
+  });
+
+  it("does not trigger reconnect when not closed", () => {
+    getOrCreateTerminal("sess-4", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    hoisted.state.capturedOnKey?.({ key: "\r" });
+    expect(hoisted.reconnectBySessionMock).not.toHaveBeenCalled();
+    disposeTerminal("sess-4");
+  });
+
+  it("loads the official web links addon and opens HTTP URLs through Wails", () => {
+    hoisted.state.lines.set(0, "Docs: https://help.ubuntu.com, ip 10.2.4.16 load 0.06");
+    getOrCreateTerminal("sess-url", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+
+    expect(hoisted.webLinksAddonCtor).toHaveBeenCalledTimes(1);
+
+    let links: TestTerminalLink[] | undefined;
+    hoisted.state.linkProvider?.provideLinks(1, (provided) => {
+      links = provided as TestTerminalLink[] | undefined;
+    });
+
+    expect(links).toHaveLength(1);
+    expect(links?.[0].text).toBe("https://help.ubuntu.com");
+    expect(links?.[0].range).toEqual({ start: { x: 7, y: 1 }, end: { x: 29, y: 1 } });
+
+    const link = links?.[0];
+    expect(link).toBeDefined();
+    link?.activate(undefined, link.text);
+    expect(hoisted.browserOpenURLSpy).toHaveBeenCalledWith("https://help.ubuntu.com");
+    disposeTerminal("sess-url");
+  });
+
+  it("does not create links for bare IP addresses or numbers", () => {
+    hoisted.state.lines.set(0, "IPv4 address: 10.2.4.16 load 0.06");
+    getOrCreateTerminal("sess-no-url", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+
+    let links: TestTerminalLink[] | undefined;
+    hoisted.state.linkProvider?.provideLinks(1, (provided) => {
+      links = provided as TestTerminalLink[] | undefined;
+    });
+
+    expect(links).toBeUndefined();
+    disposeTerminal("sess-no-url");
+  });
+
+  it("disposes URL link subscriptions", () => {
+    hoisted.state.lines.set(0, "Docs: https://help.ubuntu.com");
+    getOrCreateTerminal("sess-url-dispose", {
+      fontSize: 14,
+      fontFamily: "mono",
+      scrollback: 1000,
+      theme: { brightBlue: "#89b4fa" },
+    });
+
+    disposeTerminal("sess-url-dispose");
+
+    expect(hoisted.linkProviderDisposeSpy).toHaveBeenCalled();
+    expect(hoisted.webLinksAddonDisposeSpy).toHaveBeenCalled();
+  });
+
+  it("disposes bridge, url highlighter, webgl, web links and term in order", () => {
     getOrCreateTerminal("sess-order", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
     disposeTerminal("sess-order");
-    expect(hoisted.disposeOrder).toEqual(["bridge", "webgl", "term"]);
+    expect(hoisted.bridgeDisposeSpy).toHaveBeenCalled();
+    expect(hoisted.disposeSpy).toHaveBeenCalled();
+    expect(hoisted.disposeOrder).toEqual(["bridge", "urlHighlighter", "webgl", "webLinks", "term"]);
   });
 
   it("skips WebGL when webglEnabled is false", () => {
@@ -270,5 +442,49 @@ describe("terminalRegistry", () => {
     });
     expect(hoisted.webglAddonCtor).not.toHaveBeenCalled();
     disposeTerminal("sess-no-webgl");
+    expect(hoisted.webglAddonDisposeSpy).not.toHaveBeenCalled();
+  });
+
+  it("writes terminal output bytes unchanged without injecting URL color ANSI", () => {
+    const encoder = new TextEncoder();
+    getOrCreateTerminal("sess-url-ansi", {
+      fontSize: 14,
+      fontFamily: "mono",
+      scrollback: 1000,
+      theme: { brightBlue: "#89b4fa" },
+    });
+
+    hoisted.eventHandlers.get("ssh:data:sess-url-ansi")?.(
+      btoa(String.fromCharCode(...encoder.encode("\x1b[31mDocs: https://help.ubuntu.com suffix\x1b[0m")))
+    );
+
+    expect(hoisted.writeSpy).toHaveBeenCalledWith(
+      encoder.encode("\x1b[31mDocs: https://help.ubuntu.com suffix\x1b[0m")
+    );
+    disposeTerminal("sess-url-ansi");
+  });
+
+  it("attaches a url highlighter and disposes it with the terminal", () => {
+    getOrCreateTerminal("sess-highlight", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    expect(hoisted.attachUrlHighlighterSpy).toHaveBeenCalledTimes(1);
+
+    disposeTerminal("sess-highlight");
+    expect(hoisted.urlHighlighterDisposeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables allowProposedApi so the highlighter's registerDecoration calls don't throw", () => {
+    getOrCreateTerminal("sess-proposed", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    expect(hoisted.terminalCtor).toHaveBeenCalledWith(expect.objectContaining({ allowProposedApi: true }));
+    disposeTerminal("sess-proposed");
+  });
+
+  it("re-creates a fresh terminal after dispose for the same sessionId", () => {
+    const before = hoisted.terminalCtor.mock.calls.length;
+    getOrCreateTerminal("sess-5", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    disposeTerminal("sess-5");
+    expect(hoisted.disposeSpy).toHaveBeenCalled();
+    getOrCreateTerminal("sess-5", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    expect(hoisted.terminalCtor.mock.calls.length).toBe(before + 2);
+    disposeTerminal("sess-5");
   });
 });

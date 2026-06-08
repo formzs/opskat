@@ -9,13 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cago-frame/cago/pkg/logger"
+	"go.uber.org/zap"
+
 	"github.com/opskat/opskat/internal/app/i18n"
 	"github.com/opskat/opskat/internal/model/entity/asset_entity"
 	"github.com/opskat/opskat/internal/pkg/dirsync"
 	"github.com/opskat/opskat/internal/service/asset_svc"
 	"github.com/opskat/opskat/internal/service/credential_svc"
+	"github.com/opskat/opskat/internal/service/server_status_svc"
 	"github.com/opskat/opskat/internal/service/ssh_svc"
-	"github.com/opskat/opskat/internal/service/testreg"
 	"github.com/opskat/opskat/internal/sshpool"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -314,17 +317,13 @@ func (s *SSH) UpdateAssetPassword(assetID int64, password string) error {
 	return asset_svc.Asset().Update(i18n.Ctx(s.ctx, s.lang.Lang()), asset)
 }
 
-// TestSSHConnection 测试 SSH 连接（不创建终端会话）
-func (s *SSH) TestSSHConnection(testID string, configJSON string, plainPassword string) error {
+// testConnection 测试一份未保存的 SSH 配置（不创建终端会话）；经 conntest 注册表由
+// System.TestAssetConnection 分发，信封（超时/取消/i18n ctx）由调用方统一施加。
+func (s *SSH) testConnection(ctx context.Context, configJSON string, plainPassword string) error {
 	var sshCfg asset_entity.SSHConfig
 	if err := json.Unmarshal([]byte(configJSON), &sshCfg); err != nil {
 		return fmt.Errorf("配置解析失败: %w", err)
 	}
-
-	parent, parentCancel := context.WithTimeout(i18n.Ctx(s.ctx, s.lang.Lang()), 10*time.Second)
-	defer parentCancel()
-	ctx, release := testreg.Begin(parent, testID)
-	defer release()
 
 	storedPassword, key, passphrase := s.resolveSSHCredentialsFull(&sshCfg)
 	password := plainPassword
@@ -390,6 +389,39 @@ func (s *SSH) ResizeSSH(sessionID string, cols int, rows int) error {
 		return fmt.Errorf("会话不存在: %s", sessionID)
 	}
 	return sess.Resize(cols, rows)
+}
+
+// GetSSHServerStatus 查询当前 SSH 会话对应服务器的状态快照。
+func (s *SSH) GetSSHServerStatus(sessionID string) (*server_status_svc.Snapshot, error) {
+	sess, ok := s.manager.GetSession(sessionID)
+	if !ok {
+		return nil, fmt.Errorf("会话不存在: %s", sessionID)
+	}
+
+	baseCtx := s.ctx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	lang := ""
+	if s.lang != nil {
+		lang = s.lang.Lang()
+	}
+	ctx := i18n.Ctx(baseCtx, lang)
+	ctx = logger.WithContextField(ctx, zap.String("sessionID", sessionID), zap.Int64("assetID", sess.AssetID))
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	logger.Ctx(ctx).Info("ssh server status start")
+	snapshot, err := server_status_svc.Collect(ctx, sess.Client())
+	if err != nil {
+		logger.Ctx(ctx).Error("ssh server status failed", zap.Error(err))
+		return nil, err
+	}
+	logger.Ctx(ctx).Info("ssh server status end",
+		zap.String("hostname", snapshot.Hostname),
+		zap.String("os", snapshot.OS),
+	)
+	return snapshot, nil
 }
 
 // GetSSHSyncState 返回会话当前的目录同步状态。

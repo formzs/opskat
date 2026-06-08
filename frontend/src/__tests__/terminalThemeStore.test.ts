@@ -46,6 +46,7 @@ describe("terminalThemeStore", () => {
       scrollback: SCROLLBACK_DEFAULT,
       enableImagePreview: true,
       webglEnabled: true,
+      highlightLinks: false,
     });
   });
 
@@ -76,6 +77,68 @@ describe("terminalThemeStore", () => {
     useTerminalThemeStore.getState().setFontPresetId("menlo");
     expect(useTerminalThemeStore.getState().fontPresetId).toBe(DEFAULT_TERMINAL_FONT_PRESET_ID);
     expect(useTerminalThemeStore.getState().fontFamily).toBe(DEFAULT_TERMINAL_FONT_FAMILY);
+  });
+
+  describe("setHighlightLinks", () => {
+    it("defaults to disabled and toggles URL highlighting", () => {
+      expect(useTerminalThemeStore.getState().highlightLinks).toBe(false);
+
+      useTerminalThemeStore.getState().setHighlightLinks(true);
+      expect(useTerminalThemeStore.getState().highlightLinks).toBe(true);
+
+      useTerminalThemeStore.getState().setHighlightLinks(false);
+      expect(useTerminalThemeStore.getState().highlightLinks).toBe(false);
+    });
+  });
+
+  describe("custom theme CRUD", () => {
+    it("adds a custom theme", () => {
+      const theme = makeCustomTheme("c1", "My Theme");
+      useTerminalThemeStore.getState().addCustomTheme(theme);
+
+      expect(useTerminalThemeStore.getState().customThemes).toHaveLength(1);
+      expect(useTerminalThemeStore.getState().customThemes[0].id).toBe("c1");
+    });
+
+    it("updates a custom theme", () => {
+      const theme = makeCustomTheme("c1", "My Theme");
+      useTerminalThemeStore.getState().addCustomTheme(theme);
+
+      const updated = { ...theme, name: "Renamed Theme" };
+      useTerminalThemeStore.getState().updateCustomTheme(updated);
+
+      expect(useTerminalThemeStore.getState().customThemes[0].name).toBe("Renamed Theme");
+    });
+
+    it("removes a custom theme", () => {
+      const theme = makeCustomTheme("c1", "My Theme");
+      useTerminalThemeStore.getState().addCustomTheme(theme);
+      useTerminalThemeStore.getState().removeCustomTheme("c1");
+
+      expect(useTerminalThemeStore.getState().customThemes).toHaveLength(0);
+    });
+
+    it("resets selectedThemeId to default when removing selected custom theme", () => {
+      const theme = makeCustomTheme("c1", "My Theme");
+      useTerminalThemeStore.getState().addCustomTheme(theme);
+      useTerminalThemeStore.getState().setSelectedThemeId("c1");
+
+      useTerminalThemeStore.getState().removeCustomTheme("c1");
+
+      expect(useTerminalThemeStore.getState().selectedThemeId).toBe("default");
+    });
+
+    it("keeps selectedThemeId when removing a different custom theme", () => {
+      const t1 = makeCustomTheme("c1", "Theme 1");
+      const t2 = makeCustomTheme("c2", "Theme 2");
+      useTerminalThemeStore.getState().addCustomTheme(t1);
+      useTerminalThemeStore.getState().addCustomTheme(t2);
+      useTerminalThemeStore.getState().setSelectedThemeId("c2");
+
+      useTerminalThemeStore.getState().removeCustomTheme("c1");
+
+      expect(useTerminalThemeStore.getState().selectedThemeId).toBe("c2");
+    });
   });
 
   it("keeps the preset list aligned with bundled font count", () => {

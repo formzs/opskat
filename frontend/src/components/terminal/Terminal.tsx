@@ -22,7 +22,7 @@ import { TerminalSearchBar } from "./TerminalSearchBar";
 import { useSFTPStore } from "@/stores/sftpStore";
 import { useTabStore } from "@/stores/tabStore";
 import { bytesToBase64 } from "@/lib/terminalEncode";
-import { getOrCreateTerminal, getTerminalInstance } from "./terminalRegistry";
+import { getOrCreateTerminal, getTerminalInstance, terminalUrlHighlightColor } from "./terminalRegistry";
 
 export interface TerminalHandle {
   toggleSearch: () => void;
@@ -49,6 +49,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const scrollback = useTerminalThemeStore((s) => s.scrollback);
   const enableImagePreview = useTerminalThemeStore((s) => s.enableImagePreview);
   const webglEnabled = useTerminalThemeStore((s) => s.webglEnabled);
+  const highlightLinks = useTerminalThemeStore((s) => s.highlightLinks);
   const selectedThemeId = useTerminalThemeStore((s) => s.selectedThemeId);
   const customThemes = useTerminalThemeStore((s) => s.customThemes);
   const resolvedTheme = useResolvedTheme();
@@ -100,6 +101,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       scrollback,
       transport,
       webglEnabled,
+      highlightLinks,
     });
     termRef.current = inst.term;
     fitAddonRef.current = inst.fitAddon;
@@ -113,6 +115,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     requestAnimationFrame(() => {
       inst.fitAddon.fit();
       inst.imageController.requestRender();
+      // 首次挂载时立即把图片层尺寸同步到当前布局，避免 overlay 先渲染成空白。
       const dims = inst.fitAddon.proposeDimensions();
       if (dims && dims.cols > 0 && dims.rows > 0) {
         spec.resize(sessionId, dims.cols, dims.rows).catch(console.error);
@@ -178,15 +181,12 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     termRef.current.options.fontSize = fontSize;
     termRef.current.options.fontFamily = withTerminalFontIsolation(sessionId, withTerminalFontFallback(fontFamily));
     termRef.current.options.scrollback = scrollback;
+    inst.urlHighlighter.setEnabled(highlightLinks);
+    inst.urlHighlighter.setColor(terminalUrlHighlightColor(xtermTheme));
     fitAddonRef.current?.fit();
     inst.imageController.requestRender();
-  }, [sessionId, xtermTheme, fontSize, fontFamily, scrollback]);
-
-  useEffect(() => {
-    const inst = getTerminalInstance(sessionId);
-    if (!inst) return;
     inst.imageController.setEnabled(enableImagePreview);
-  }, [sessionId, enableImagePreview]);
+  }, [sessionId, xtermTheme, fontSize, fontFamily, scrollback, highlightLinks, enableImagePreview]);
 
   useEffect(() => {
     const inst = getTerminalInstance(sessionId);

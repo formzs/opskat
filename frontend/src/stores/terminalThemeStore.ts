@@ -101,6 +101,7 @@ interface TerminalThemeState {
   scrollback: number;
   enableImagePreview: boolean;
   webglEnabled: boolean;
+  highlightLinks: boolean;
   // 最近一次 WebGL 自动关闭的原因。setWebglEnabled(true) 会把它清掉，所以只在
   // GPU 加速被系统自动关掉后到下一次用户主动开启之间存在。
   webglError: WebglFailure | null;
@@ -111,6 +112,7 @@ interface TerminalThemeState {
   setScrollback: (lines: number) => void;
   setEnableImagePreview: (enabled: boolean) => void;
   setWebglEnabled: (enabled: boolean) => void;
+  setHighlightLinks: (enabled: boolean) => void;
   reportWebglFailure: (failure: WebglFailure) => void;
   addCustomTheme: (theme: TerminalTheme) => void;
   updateCustomTheme: (theme: TerminalTheme) => void;
@@ -129,10 +131,12 @@ export const useTerminalThemeStore = create<TerminalThemeState>()(
       scrollback: SCROLLBACK_DEFAULT,
       enableImagePreview: true,
       webglEnabled: true,
+      highlightLinks: false,
       webglError: null,
 
       setSelectedThemeId: (id) => set({ selectedThemeId: id }),
       setWebglEnabled: (enabled) => set(enabled ? { webglEnabled: true, webglError: null } : { webglEnabled: false }),
+      setHighlightLinks: (enabled) => set({ highlightLinks: enabled }),
       reportWebglFailure: (failure) => set({ webglError: failure }),
       setFontSize: (size) => set({ fontSize: Math.max(8, Math.min(32, size)) }),
       setFontPresetId: (presetId) => {

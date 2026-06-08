@@ -1,9 +1,10 @@
 import { Terminal as XTerminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
-import { EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
+import { BrowserOpenURL, EventsOn, EventsOff } from "../../../wailsjs/runtime/runtime";
 import { base64ToBytes, bytesToBase64 } from "@/lib/terminalEncode";
 import { useTerminalStore, TRANSPORTS, type TerminalTransport } from "@/stores/terminalStore";
 import { useTerminalThemeStore } from "@/stores/terminalThemeStore";
@@ -13,6 +14,8 @@ import i18n from "@/i18n";
 import { createTerminalInputBridge, type TerminalInputBridge } from "./terminalInputBridge";
 import { TerminalImageController } from "./terminalImageProtocol";
 import { attachXtermRolloverGuard } from "./xtermRolloverGuard";
+import { attachTerminalUrlHighlighter, type TerminalUrlHighlighterController } from "./terminalUrlHighlighter";
+import { normalizeHttpUrl } from "./terminalUrlScan";
 
 export interface TerminalInstance {
   term: XTerminal;
@@ -21,6 +24,7 @@ export interface TerminalInstance {
   container: HTMLDivElement;
   imageController: TerminalImageController;
   bridge: TerminalInputBridge;
+  urlHighlighter: TerminalUrlHighlighterController;
 }
 
 interface InternalInstance extends TerminalInstance {
@@ -39,6 +43,7 @@ export function getOrCreateTerminal(
     scrollback: number;
     transport?: TerminalTransport;
     webglEnabled?: boolean;
+    highlightLinks?: boolean;
   }
 ): TerminalInstance {
   const cached = registry.get(sessionId);
@@ -52,6 +57,9 @@ export function getOrCreateTerminal(
 
   const term = new XTerminal({
     cursorBlink: true,
+    // Required for the URL highlighter: registerDecoration is proposed API and
+    // xterm throws without this, so the link tint would never render (#153).
+    allowProposedApi: true,
     fontSize: init.fontSize,
     // 给每个 session 加独占 sentinel，避免 xterm 全局 CharAtlasCache 在 fontFamily/
     // fontSize/theme 相同的 terminal 之间共享 TextureAtlas（详见 withTerminalFontIsolation
@@ -63,10 +71,21 @@ export function getOrCreateTerminal(
 
   const fitAddon = new FitAddon();
   const searchAddon = new SearchAddon();
+  const webLinksAddon = new WebLinksAddon((_event, uri) => {
+    const url = normalizeHttpUrl(uri);
+    if (url) BrowserOpenURL(url);
+  });
   term.loadAddon(fitAddon);
   term.loadAddon(searchAddon);
+  term.loadAddon(webLinksAddon);
   term.open(container);
   const imageController = new TerminalImageController(sessionId, term);
+  const urlHighlighter = attachTerminalUrlHighlighter(term, {
+    enabled: init.highlightLinks === true,
+    color: terminalUrlHighlightColor(init.theme),
+  });
+
+  // 优先用调用方传入的 transport；首次挂载若没拿到（罕见），退回 session id 前缀。
   const transport: TerminalTransport =
     init.transport ?? (sessionId.startsWith("serial-") ? "serial" : sessionId.startsWith("local-") ? "local" : "ssh");
   const spec = TRANSPORTS[transport];
@@ -151,9 +170,11 @@ export function getOrCreateTerminal(
     container,
     imageController,
     bridge,
+    urlHighlighter,
     isClosed: false,
     dispose: () => {
       bridge.dispose();
+      urlHighlighter.dispose();
       rolloverGuard.dispose();
       onDataDispose.dispose();
       onKeyDispose.dispose();
@@ -168,6 +189,7 @@ export function getOrCreateTerminal(
       webglAddon?.dispose();
       webglAddon = null;
       imageController.dispose();
+      webLinksAddon.dispose();
       term.dispose();
       registry.delete(sessionId);
     },
@@ -199,4 +221,8 @@ export function disposeTerminal(sessionId: string): void {
 
 export function getTerminalInstance(sessionId: string): TerminalInstance | undefined {
   return registry.get(sessionId);
+}
+
+export function terminalUrlHighlightColor(theme: ITheme | undefined): string | undefined {
+  return theme?.brightBlue ?? theme?.blue;
 }
