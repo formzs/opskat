@@ -1,5 +1,5 @@
 import { useEffect, useState, type MutableRefObject, type RefObject } from "react";
-import { OnFileDrop, OnFileDropOff } from "../../../../wailsjs/runtime/runtime";
+import { registerFileManagerDropTarget } from "../terminalFileDropCoordinator";
 
 interface UseNativeFileDropOptions {
   currentPathRef: MutableRefObject<string>;
@@ -28,17 +28,15 @@ export function useNativeFileDrop({
 
   useEffect(() => {
     if (!isOpen || !isActive) return;
-    const handler = (_x: number, _y: number, paths: string[]) => {
-      setIsDragOver(false);
-      for (const path of paths) {
-        startUploadFile({ tabId, sessionId }, path, currentPathRef.current + "/");
-      }
-    };
-    OnFileDrop(handler, true);
-    return () => {
-      OnFileDropOff();
-    };
-  }, [currentPathRef, isActive, isOpen, sessionId, startUploadFile, tabId]);
+    return registerFileManagerDropTarget({
+      getRect: () => panelRef.current?.getBoundingClientRect(),
+      getRemoteDir: () => currentPathRef.current + "/",
+      startUploadFile: (localPath, remotePath) => {
+        setIsDragOver(false);
+        void startUploadFile({ tabId, sessionId }, localPath, remotePath);
+      },
+    });
+  }, [currentPathRef, isActive, isOpen, panelRef, sessionId, startUploadFile, tabId]);
 
   useEffect(() => {
     const el = panelRef.current;

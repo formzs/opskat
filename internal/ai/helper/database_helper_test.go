@@ -12,6 +12,43 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
+type recordCloser struct {
+	name   string
+	order  *[]string
+	closed bool
+}
+
+func (c *recordCloser) Close() error {
+	c.closed = true
+	*c.order = append(*c.order, c.name)
+	return nil
+}
+
+func TestCloseDatabaseConnOrder(t *testing.T) {
+	Convey("closeDatabaseConn 先关 *sql.DB 再关传输层 closer", t, func() {
+		// WAL 远端库的 db.Close() 会回调 VFS 删除 -wal/-shm，所以 db 必须先于
+		// 注销该 VFS 的 closer 关闭，否则回调会命中已注销的 VFS 而 panic。
+		var order []string
+		db := &recordCloser{name: "db", order: &order}
+		closer := &recordCloser{name: "closer", order: &order}
+
+		closeDatabaseConn(db, closer)
+
+		So(order, ShouldResemble, []string{"db", "closer"})
+		So(db.closed, ShouldBeTrue)
+		So(closer.closed, ShouldBeTrue)
+	})
+
+	Convey("closeDatabaseConn 容忍 nil db / nil closer", t, func() {
+		So(func() { closeDatabaseConn(nil, nil) }, ShouldNotPanic)
+
+		var order []string
+		closer := &recordCloser{name: "closer", order: &order}
+		closeDatabaseConn(nil, closer)
+		So(order, ShouldResemble, []string{"closer"})
+	})
+}
+
 func TestExecuteSQLSQLitePragmaQuery(t *testing.T) {
 	Convey("ExecuteSQL treats SQLite PRAGMA as a row-returning query", t, func() {
 		db, err := sql.Open("sqlite", ":memory:")

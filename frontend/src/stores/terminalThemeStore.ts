@@ -84,6 +84,7 @@ function normalizeFontPresetState(state: Partial<TerminalThemeState> | undefined
 }
 
 export type WebglFailureCause = "init-threw" | "context-loss";
+export type TerminalCopyBehavior = "popover-menu" | "smart-right-click" | "select-copy-right-paste";
 
 export interface WebglFailure {
   cause: WebglFailureCause;
@@ -102,6 +103,7 @@ interface TerminalThemeState {
   enableImagePreview: boolean;
   webglEnabled: boolean;
   highlightLinks: boolean;
+  copyBehavior: TerminalCopyBehavior;
   // 最近一次 WebGL 自动关闭的原因。setWebglEnabled(true) 会把它清掉，所以只在
   // GPU 加速被系统自动关掉后到下一次用户主动开启之间存在。
   webglError: WebglFailure | null;
@@ -113,6 +115,7 @@ interface TerminalThemeState {
   setEnableImagePreview: (enabled: boolean) => void;
   setWebglEnabled: (enabled: boolean) => void;
   setHighlightLinks: (enabled: boolean) => void;
+  setCopyBehavior: (behavior: TerminalCopyBehavior) => void;
   reportWebglFailure: (failure: WebglFailure) => void;
   addCustomTheme: (theme: TerminalTheme) => void;
   updateCustomTheme: (theme: TerminalTheme) => void;
@@ -132,11 +135,13 @@ export const useTerminalThemeStore = create<TerminalThemeState>()(
       enableImagePreview: true,
       webglEnabled: true,
       highlightLinks: false,
+      copyBehavior: "popover-menu",
       webglError: null,
 
       setSelectedThemeId: (id) => set({ selectedThemeId: id }),
       setWebglEnabled: (enabled) => set(enabled ? { webglEnabled: true, webglError: null } : { webglEnabled: false }),
       setHighlightLinks: (enabled) => set({ highlightLinks: enabled }),
+      setCopyBehavior: (behavior) => set({ copyBehavior: behavior }),
       reportWebglFailure: (failure) => set({ webglError: failure }),
       setFontSize: (size) => set({ fontSize: Math.max(8, Math.min(32, size)) }),
       setFontPresetId: (presetId) => {

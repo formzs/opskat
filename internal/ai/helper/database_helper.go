@@ -101,23 +101,27 @@ func HandleExecSQL(ctx context.Context, args map[string]any) (string, error) {
 	}
 	// 如果不是缓存连接，使用后关闭
 	if getDatabaseCache(ctx) == nil {
-		if db != nil {
-			defer func() {
-				if err := db.Close(); err != nil {
-					logger.Default().Warn("close database connection", zap.Error(err))
-				}
-			}()
-		}
-		if closer != nil {
-			defer func() {
-				if err := closer.Close(); err != nil {
-					logger.Default().Warn("close database tunnel", zap.Error(err))
-				}
-			}()
-		}
+		defer closeDatabaseConn(db, closer)
 	}
 
 	return ExecuteSQL(ctx, db, sqlText)
+}
+
+// closeDatabaseConn 按 SQLite 要求的顺序关闭一条即开即用的数据库连接：先 *sql.DB，
+// 再传输层 closer。关闭 WAL 数据库时 SQLite 会回调远端 VFS 删除 -wal/-shm，而 closer
+// 正是注销该 VFS（并关闭 SFTP）的地方，必须等 db.Close() 返回后才能执行——否则回调会
+// 命中已注销的 VFS 而 panic。db 形参用 io.Closer 是为了让关闭顺序可被单测验证。
+func closeDatabaseConn(db, closer io.Closer) {
+	if db != nil {
+		if err := db.Close(); err != nil {
+			logger.Default().Warn("close database connection", zap.Error(err))
+		}
+	}
+	if closer != nil {
+		if err := closer.Close(); err != nil {
+			logger.Default().Warn("close database tunnel", zap.Error(err))
+		}
+	}
 }
 
 func getOrDialDatabase(ctx context.Context, asset *asset_entity.Asset, cfg *asset_entity.DatabaseConfig) (*sql.DB, io.Closer, error) {
@@ -126,6 +130,7 @@ func getOrDialDatabase(ctx context.Context, asset *asset_entity.Asset, cfg *asse
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to resolve credentials: %w", err)
 		}
+		cfg.Proxy = credential_resolver.Default().DecryptProxyPassword(cfg.Proxy)
 		return connpool.DialDatabase(ctx, asset, cfg, password, getSSHPool(ctx))
 	}
 	if cache := getDatabaseCache(ctx); cache != nil {

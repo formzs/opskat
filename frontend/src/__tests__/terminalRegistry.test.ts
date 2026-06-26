@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const hoisted = vi.hoisted(() => {
   const eventHandlers = new Map<string, (...args: unknown[]) => void>();
   const writeSpy = vi.fn();
+  const pasteSpy = vi.fn();
+  const clipboardGetTextSpy = vi.fn();
   const disposeSpy = vi.fn();
   const reconnectBySessionMock = vi.fn();
   const terminalCtor = vi.fn();
@@ -19,6 +21,11 @@ const hoisted = vi.hoisted(() => {
   const linkProviderDisposeSpy = vi.fn();
   const attachUrlHighlighterSpy = vi.fn();
   const urlHighlighterDisposeSpy = vi.fn();
+  const queueUploadFilesSpy = vi.fn();
+  const zmodemAbortSpy = vi.fn();
+  const zmodemDisposeSpy = vi.fn();
+  const toastWarningSpy = vi.fn();
+  const toastErrorSpy = vi.fn();
   const disposeOrder: string[] = [];
   const state: {
     capturedOnKey: ((e: { key: string }) => void) | null;
@@ -26,14 +33,18 @@ const hoisted = vi.hoisted(() => {
       provideLinks: (bufferLineNumber: number, callback: (links: unknown[] | undefined) => void) => void;
     } | null;
     lines: Map<number, string>;
+    textarea: HTMLTextAreaElement | null;
   } = {
     capturedOnKey: null,
     linkProvider: null,
     lines: new Map(),
+    textarea: null,
   };
   return {
     eventHandlers,
     writeSpy,
+    pasteSpy,
+    clipboardGetTextSpy,
     disposeSpy,
     reconnectBySessionMock,
     terminalCtor,
@@ -50,7 +61,13 @@ const hoisted = vi.hoisted(() => {
     linkProviderDisposeSpy,
     attachUrlHighlighterSpy,
     urlHighlighterDisposeSpy,
+    queueUploadFilesSpy,
+    zmodemAbortSpy,
+    zmodemDisposeSpy,
+    toastWarningSpy,
+    toastErrorSpy,
     disposeOrder,
+    zmodemActive: false,
     state,
   };
 });
@@ -62,6 +79,7 @@ vi.mock("../../wailsjs/runtime/runtime", () => ({
   EventsOff: (event: string) => {
     hoisted.eventHandlers.delete(event);
   },
+  ClipboardGetText: hoisted.clipboardGetTextSpy,
   BrowserOpenURL: hoisted.browserOpenURLSpy,
 }));
 
@@ -108,6 +126,7 @@ vi.mock("@xterm/xterm", () => {
     });
     open = vi.fn();
     write = hoisted.writeSpy;
+    paste = hoisted.pasteSpy;
     onData = vi.fn(() => ({ dispose: vi.fn() }));
     onKey = vi.fn((handler: (e: { key: string }) => void) => {
       hoisted.state.capturedOnKey = handler;
@@ -116,7 +135,7 @@ vi.mock("@xterm/xterm", () => {
     onWriteParsed = vi.fn(() => ({ dispose: vi.fn() }));
     onRender = vi.fn(() => ({ dispose: vi.fn() }));
     attachCustomKeyEventHandler = vi.fn();
-    textarea = { addEventListener: vi.fn(), removeEventListener: vi.fn() } as unknown as HTMLTextAreaElement;
+    textarea = document.createElement("textarea");
     options = { screenReaderMode: false };
     registerLinkProvider = vi.fn((provider) => {
       hoisted.state.linkProvider = provider;
@@ -127,6 +146,7 @@ vi.mock("@xterm/xterm", () => {
       hoisted.disposeSpy();
     });
     constructor(options?: unknown) {
+      hoisted.state.textarea = this.textarea;
       hoisted.terminalCtor(options);
     }
   }
@@ -136,8 +156,10 @@ vi.mock("@xterm/xterm", () => {
 vi.mock("@/components/terminal/terminalInputBridge", () => ({
   createTerminalInputBridge: vi.fn(() => ({
     setShortcuts: vi.fn(),
-    setOnFilter: vi.fn(),
     setOnCopy: vi.fn(),
+    setOnPaste: vi.fn(),
+    setOnSelectAll: vi.fn(),
+    setOnFind: vi.fn(),
     dispose: vi.fn(() => {
       hoisted.disposeOrder.push("bridge");
       hoisted.bridgeDisposeSpy();
@@ -221,6 +243,23 @@ vi.mock("@/components/terminal/terminalUrlHighlighter", () => ({
   },
 }));
 
+vi.mock("@/components/terminal/zmodem/zmodemSession", () => ({
+  createZmodemController: vi.fn((opts: { toTerminal: (bytes: Uint8Array) => void }) => ({
+    consume: (bytes: Uint8Array) => opts.toTerminal(bytes),
+    isActive: () => hoisted.zmodemActive,
+    abort: hoisted.zmodemAbortSpy,
+    dispose: hoisted.zmodemDisposeSpy,
+    queueUploadFiles: hoisted.queueUploadFilesSpy,
+  })),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    warning: hoisted.toastWarningSpy,
+    error: hoisted.toastErrorSpy,
+  },
+}));
+
 vi.mock("@/stores/terminalStore", async (importActual) => {
   const actual = await importActual<typeof import("@/stores/terminalStore")>();
   return {
@@ -252,8 +291,13 @@ vi.mock("@/data/terminalFonts", () => ({
   withTerminalFontIsolation: (_id: string, s: string) => s,
 }));
 vi.mock("@/lib/terminalEncode", () => ({
-  base64ToBytes: (_base64: string) => new Uint8Array(),
-  bytesToBase64: () => "",
+  base64ToBytes: (base64: string) => {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  },
+  bytesToBase64: (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)),
 }));
 vi.mock("@/components/terminal/terminalImageProtocol", () => ({
   TerminalImageController: class {
@@ -272,8 +316,15 @@ vi.mock("@/i18n", () => ({
   default: { t: (key: string) => `<<${key}>>` },
 }));
 
-import { getOrCreateTerminal, disposeTerminal } from "@/components/terminal/terminalRegistry";
+import {
+  getOrCreateTerminal,
+  disposeTerminal,
+  pasteIntoTerminal,
+  pasteFromClipboard,
+  uploadFilesWithRz,
+} from "@/components/terminal/terminalRegistry";
 import { TRANSPORTS, transportForAsset, inferTransportFromSessionId } from "@/stores/terminalStore";
+import { WriteSSH } from "../../wailsjs/go/ssh/SSH";
 
 interface TestTerminalLink {
   text: string;
@@ -322,6 +373,8 @@ describe("terminalRegistry", () => {
     hoisted.state.linkProvider = null;
     hoisted.state.lines.clear();
     hoisted.writeSpy.mockClear();
+    hoisted.pasteSpy.mockClear();
+    hoisted.clipboardGetTextSpy.mockReset();
     hoisted.disposeSpy.mockClear();
     hoisted.reconnectBySessionMock.mockClear();
     hoisted.terminalCtor.mockClear();
@@ -338,7 +391,59 @@ describe("terminalRegistry", () => {
     hoisted.linkProviderDisposeSpy.mockClear();
     hoisted.attachUrlHighlighterSpy.mockClear();
     hoisted.urlHighlighterDisposeSpy.mockClear();
+    hoisted.queueUploadFilesSpy.mockClear();
+    hoisted.zmodemAbortSpy.mockClear();
+    hoisted.zmodemDisposeSpy.mockClear();
+    hoisted.toastWarningSpy.mockClear();
+    hoisted.toastErrorSpy.mockClear();
+    hoisted.zmodemActive = false;
+    hoisted.state.textarea = null;
+    vi.mocked(WriteSSH).mockClear();
     hoisted.disposeOrder.length = 0;
+  });
+
+  it("queues dropped files and writes rz to an SSH terminal", async () => {
+    getOrCreateTerminal("sess-rz", { fontSize: 14, fontFamily: "mono", scrollback: 1000, transport: "ssh" });
+
+    await expect(uploadFilesWithRz("sess-rz", ["C:/tmp/a.txt"])).resolves.toBe(true);
+
+    expect(hoisted.queueUploadFilesSpy).toHaveBeenCalledWith(["C:/tmp/a.txt"]);
+    expect(WriteSSH).toHaveBeenCalledWith("sess-rz", btoa("rz\r"));
+    disposeTerminal("sess-rz");
+  });
+
+  it("does not start a second rz upload before the first one is detected", async () => {
+    getOrCreateTerminal("sess-rz-pending", { fontSize: 14, fontFamily: "mono", scrollback: 1000, transport: "ssh" });
+
+    await expect(uploadFilesWithRz("sess-rz-pending", ["C:/tmp/a.txt"])).resolves.toBe(true);
+    await expect(uploadFilesWithRz("sess-rz-pending", ["C:/tmp/b.txt"])).resolves.toBe(false);
+
+    expect(hoisted.toastWarningSpy).toHaveBeenCalledWith("<<zmodem.dragBusy>>");
+    expect(hoisted.queueUploadFilesSpy).toHaveBeenCalledTimes(1);
+    expect(WriteSSH).toHaveBeenCalledTimes(1);
+    disposeTerminal("sess-rz-pending");
+  });
+
+  it("does not start rz upload for non-SSH terminals", async () => {
+    getOrCreateTerminal("local-rz", { fontSize: 14, fontFamily: "mono", scrollback: 1000, transport: "local" });
+
+    await expect(uploadFilesWithRz("local-rz", ["C:/tmp/a.txt"])).resolves.toBe(false);
+
+    expect(hoisted.queueUploadFilesSpy).not.toHaveBeenCalled();
+    expect(WriteSSH).not.toHaveBeenCalled();
+    disposeTerminal("local-rz");
+  });
+
+  it("does not start rz upload while ZMODEM is active", async () => {
+    hoisted.zmodemActive = true;
+    getOrCreateTerminal("sess-rz-busy", { fontSize: 14, fontFamily: "mono", scrollback: 1000, transport: "ssh" });
+
+    await expect(uploadFilesWithRz("sess-rz-busy", ["C:/tmp/a.txt"])).resolves.toBe(false);
+
+    expect(hoisted.toastWarningSpy).toHaveBeenCalledWith("<<zmodem.dragBusy>>");
+    expect(hoisted.queueUploadFilesSpy).not.toHaveBeenCalled();
+    expect(WriteSSH).not.toHaveBeenCalled();
+    disposeTerminal("sess-rz-busy");
   });
 
   it("writes the i18n closed hint and marks closed when ssh:closed fires", () => {
@@ -397,6 +502,21 @@ describe("terminalRegistry", () => {
     disposeTerminal("sess-url");
   });
 
+  it("does not open terminal links on right click", () => {
+    hoisted.state.lines.set(0, "Docs: https://help.ubuntu.com");
+    getOrCreateTerminal("sess-url-right-click", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+
+    let links: TestTerminalLink[] | undefined;
+    hoisted.state.linkProvider?.provideLinks(1, (provided) => {
+      links = provided as TestTerminalLink[] | undefined;
+    });
+
+    const rightClick = new MouseEvent("mouseup", { button: 2 });
+    links?.[0].activate(rightClick, links[0].text);
+    expect(hoisted.browserOpenURLSpy).not.toHaveBeenCalled();
+    disposeTerminal("sess-url-right-click");
+  });
+
   it("does not create links for bare IP addresses or numbers", () => {
     hoisted.state.lines.set(0, "IPv4 address: 10.2.4.16 load 0.06");
     getOrCreateTerminal("sess-no-url", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
@@ -443,6 +563,66 @@ describe("terminalRegistry", () => {
     expect(hoisted.webglAddonCtor).not.toHaveBeenCalled();
     disposeTerminal("sess-no-webgl");
     expect(hoisted.webglAddonDisposeSpy).not.toHaveBeenCalled();
+  });
+
+  // #146: 右键菜单粘贴必须经 xterm 的 term.paste()——它统一做 CRLF/LF → CR 归一化
+  // (replace(/\r?\n/g,"\r")) 并按 bracketed paste 包裹，与原生 Cmd/Ctrl+V 同源。
+  // 旧实现把剪贴板原文(含 \r\n)直接 base64 写给后端：PTY 的 ICRNL 把每个 \r 当换行
+  // 触发 `\` 续行，紧随的裸 \n 又立刻结束空续行并执行半截命令 → 多行命令被逐行拆开
+  // (docker run 单独报 "requires at least 1 argument")。这里锁死"必须走 term.paste"。
+  it("pasteIntoTerminal routes clipboard text through xterm term.paste (not a raw write)", () => {
+    getOrCreateTerminal("sess-paste", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    const crlf = "docker run \\\r\n-v x\r\nnginx";
+    pasteIntoTerminal("sess-paste", crlf);
+    expect(hoisted.pasteSpy).toHaveBeenCalledTimes(1);
+    expect(hoisted.pasteSpy).toHaveBeenCalledWith(crlf);
+    disposeTerminal("sess-paste");
+  });
+
+  it("pasteIntoTerminal is a no-op for an unknown session", () => {
+    expect(() => pasteIntoTerminal("sess-missing", "x")).not.toThrow();
+    expect(hoisted.pasteSpy).not.toHaveBeenCalled();
+  });
+
+  // 右键菜单粘贴必须经 Wails 原生 ClipboardGetText（Go 侧读系统剪贴板），
+  // 不能用 navigator.clipboard.readText()——macOS WKWebView 对 JS 读剪贴板有隐私
+  // 保护，会在光标处弹出系统原生「粘贴」按钮要求二次点击，而不是直接粘贴。
+  // 这里锁死"必须走原生 ClipboardGetText 取文，再喂给 term.paste"。
+  it("pasteFromClipboard reads via native Wails ClipboardGetText and routes through term.paste", async () => {
+    getOrCreateTerminal("sess-clip", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    const clip = "docker run \\\r\n-v x\r\nnginx";
+    hoisted.clipboardGetTextSpy.mockResolvedValue(clip);
+    await pasteFromClipboard("sess-clip");
+    expect(hoisted.clipboardGetTextSpy).toHaveBeenCalledTimes(1);
+    expect(hoisted.pasteSpy).toHaveBeenCalledTimes(1);
+    expect(hoisted.pasteSpy).toHaveBeenCalledWith(clip);
+    disposeTerminal("sess-clip");
+  });
+
+  it("pasteFromClipboard can suppress the following native paste event to prevent duplicate paste", async () => {
+    getOrCreateTerminal("sess-clip-suppress", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    const textarea = hoisted.state.textarea;
+    expect(textarea).not.toBeNull();
+
+    hoisted.clipboardGetTextSpy.mockResolvedValue("echo once\n");
+    const pastePromise = pasteFromClipboard("sess-clip-suppress", { suppressNativePaste: true });
+    const nativePasteAllowed = textarea!.dispatchEvent(new ClipboardEvent("paste", { cancelable: true }));
+    await pastePromise;
+
+    expect(nativePasteAllowed).toBe(false);
+    expect(hoisted.clipboardGetTextSpy).toHaveBeenCalledTimes(1);
+    expect(hoisted.pasteSpy).toHaveBeenCalledTimes(1);
+    expect(hoisted.pasteSpy).toHaveBeenCalledWith("echo once\n");
+    disposeTerminal("sess-clip-suppress");
+  });
+
+  it("pasteFromClipboard does not paste when the clipboard is empty", async () => {
+    getOrCreateTerminal("sess-clip-empty", { fontSize: 14, fontFamily: "mono", scrollback: 1000 });
+    hoisted.clipboardGetTextSpy.mockResolvedValue("");
+    await pasteFromClipboard("sess-clip-empty");
+    expect(hoisted.clipboardGetTextSpy).toHaveBeenCalledTimes(1);
+    expect(hoisted.pasteSpy).not.toHaveBeenCalled();
+    disposeTerminal("sess-clip-empty");
   });
 
   it("writes terminal output bytes unchanged without injecting URL color ANSI", () => {

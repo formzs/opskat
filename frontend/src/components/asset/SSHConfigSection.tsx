@@ -15,7 +15,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@opskat/ui";
-import { AssetSelect } from "@/components/asset/AssetSelect";
+import { ConnectionMethodFields } from "@/components/asset/ConnectionMethodFields";
 import { PasswordSourceField } from "@/components/asset/PasswordSourceField";
 import { ListCredentialsByType } from "../../../wailsjs/go/system/System";
 import { ListLocalSSHKeys, SelectSSHKeyFile } from "../../../wailsjs/go/ssh/SSH";
@@ -119,105 +119,29 @@ export const SSHConfigSection = forwardRef<AssetFormHandle, ConfigSectionProps>(
     <>
       {/* SSH: Connection & Auth (single visual block) */}
       <div className="grid gap-3 border rounded-lg p-3">
-        {/* Connection type (own label) */}
-        <div className="grid gap-2">
-          <Label>{t("asset.connectionType")}</Label>
-          <Select
-            value={state.connectionType}
-            onValueChange={(v) => patch({ connectionType: v as "direct" | "jumphost" | "proxy" })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="direct">{t("asset.connectionDirect")}</SelectItem>
-              <SelectItem value="jumphost">{t("asset.connectionJumpHost")}</SelectItem>
-              <SelectItem value="proxy">{t("asset.connectionProxy")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Jump host selector */}
-        {state.connectionType === "jumphost" && (
-          <div className="grid gap-2">
-            <Label>{t("asset.selectJumpHost")}</Label>
-            <AssetSelect
-              value={state.sshTunnelId}
-              onValueChange={(v) => patch({ sshTunnelId: v })}
-              filterType="ssh"
-              excludeIds={jumpHostExcludeIds}
-              placeholder={t("asset.jumpHostNone")}
-            />
-          </div>
-        )}
-
-        {/* Proxy config (inline, no nested border since we are already in a block) */}
-        {state.connectionType === "proxy" && (
-          <div className="grid gap-2">
-            <div className="grid grid-cols-3 gap-2">
-              <div className="grid gap-1">
-                <Label className="text-xs">{t("asset.proxyType")}</Label>
-                <Select value={state.proxyType} onValueChange={(v) => patch({ proxyType: v })}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="socks5">SOCKS5</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1">
-                <Label className="text-xs">{t("asset.proxyHost")}</Label>
-                <Input
-                  className="h-8 text-xs"
-                  value={state.proxyHost}
-                  onChange={(e) => patch({ proxyHost: e.target.value })}
-                  placeholder="127.0.0.1"
-                />
-              </div>
-              <div className="grid gap-1">
-                <Label className="text-xs">{t("asset.proxyPort")}</Label>
-                <Input
-                  className="h-8 text-xs [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  type="number"
-                  value={state.proxyPort || ""}
-                  placeholder="1080"
-                  onChange={(e) => patch({ proxyPort: Number(e.target.value) })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="grid gap-1">
-                <Label className="text-xs">{t("asset.proxyUsername")}</Label>
-                <Input
-                  className="h-8 text-xs"
-                  value={state.proxyUsername}
-                  onChange={(e) => patch({ proxyUsername: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-1">
-                <Label className="text-xs">{t("asset.proxyPassword")}</Label>
-                <Input
-                  className="h-8 text-xs"
-                  type="password"
-                  value={state.proxyPassword}
-                  onChange={(e) => patch({ proxyPassword: e.target.value })}
-                  placeholder={state.encryptedProxyPassword ? t("asset.passwordUnchanged") : ""}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+        <ConnectionMethodFields
+          value={state}
+          onChange={patch}
+          excludeIds={jumpHostExcludeIds}
+          tunnelOptionLabelKey="asset.connectionJumpHost"
+          tunnelSelectLabelKey="asset.selectJumpHost"
+        />
 
         {/* Host + Port (each labeled) */}
         <div className="grid grid-cols-[1fr_120px] gap-3">
           <div className="grid gap-2">
             <Label>{t("asset.host")}</Label>
-            <Input value={state.host} onChange={(e) => patch({ host: e.target.value })} placeholder="example.com" />
+            <Input
+              data-testid="ssh-host-input"
+              value={state.host}
+              onChange={(e) => patch({ host: e.target.value })}
+              placeholder="example.com"
+            />
           </div>
           <div className="grid gap-2">
             <Label>{t("asset.port")}</Label>
             <Input
+              data-testid="ssh-port-input"
               className="[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               type="number"
               value={state.port || ""}
@@ -231,17 +155,25 @@ export const SSHConfigSection = forwardRef<AssetFormHandle, ConfigSectionProps>(
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-2">
             <Label>{t("asset.username")}</Label>
-            <Input value={state.username} onChange={(e) => patch({ username: e.target.value })} />
+            <Input
+              data-testid="ssh-username-input"
+              value={state.username}
+              onChange={(e) => patch({ username: e.target.value })}
+            />
           </div>
           <div className="grid gap-2">
             <Label>{t("asset.authType")}</Label>
             <Select value={state.authType} onValueChange={(v) => patch({ authType: v })}>
-              <SelectTrigger>
+              <SelectTrigger data-testid="ssh-auth-type-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="password">{t("asset.authPassword")}</SelectItem>
-                <SelectItem value="key">{t("asset.authKey")}</SelectItem>
+                <SelectItem value="password" data-testid="ssh-auth-type-option-password">
+                  {t("asset.authPassword")}
+                </SelectItem>
+                <SelectItem value="key" data-testid="ssh-auth-type-option-key">
+                  {t("asset.authKey")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -270,12 +202,16 @@ export const SSHConfigSection = forwardRef<AssetFormHandle, ConfigSectionProps>(
             <div className="grid gap-2">
               <Label>{t("asset.keySource")}</Label>
               <Select value={state.keySource} onValueChange={(v) => patch({ keySource: v as "managed" | "file" })}>
-                <SelectTrigger>
+                <SelectTrigger data-testid="ssh-key-source-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="managed">{t("asset.keySourceManaged")}</SelectItem>
-                  <SelectItem value="file">{t("asset.keySourceFile")}</SelectItem>
+                  <SelectItem value="managed" data-testid="ssh-key-source-option-managed">
+                    {t("asset.keySourceManaged")}
+                  </SelectItem>
+                  <SelectItem value="file" data-testid="ssh-key-source-option-file">
+                    {t("asset.keySourceFile")}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -332,6 +268,7 @@ export const SSHConfigSection = forwardRef<AssetFormHandle, ConfigSectionProps>(
                       return (
                         <label
                           key={k.path}
+                          data-testid={`ssh-local-key-${k.path.split("/").pop() || "key"}`}
                           className="flex items-center gap-2 text-xs cursor-pointer hover:bg-accent rounded px-2 py-1.5"
                         >
                           <input

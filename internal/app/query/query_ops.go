@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -23,22 +24,43 @@ import (
 
 // --- panel 连接缓存助手 ---
 
-// getOrDialPanelDB 从面板缓存取 *sql.DB,key 按 (assetID, cfg.Database)。
-func (q *Query) getOrDialPanelDB(ctx context.Context, asset *asset_entity.Asset, cfg *asset_entity.DatabaseConfig, password string) (*sql.DB, error) {
-	key := fmt.Sprintf("%d:%s", asset.ID, cfg.Database)
+// getOrDialPanelDB 从面板缓存取 *sql.DB,所有数据库类型(含远端 SQLite VFS)统一缓存。
+// 远端 SQLite 在会话内只抢一次 .opskat.lock,由缓存的空闲驱逐/关闭统一释放;其 *sql.DB
+// 的 MaxOpenConns=1 让并发面板操作排队复用同一条连接,而非各自重连抢锁、并发时硬失败。
+func (q *Query) getOrDialPanelDB(ctx context.Context, asset *asset_entity.Asset, cfg *asset_entity.DatabaseConfig, password string) (*sql.DB, func() error, error) {
+	key := panelDBCacheKey(asset.ID, cfg)
 	db, _, err := q.dbPanelCache.GetOrDial(key, func() (*sql.DB, io.Closer, error) {
+		cfg.Proxy = credential_resolver.Default().DecryptProxyPassword(cfg.Proxy)
 		return connpool.DialDatabase(ctx, asset, cfg, password, q.pool)
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return db, nil
+	return db, func() error { return nil }, nil
+}
+
+func panelDBCacheKey(assetID int64, cfg *asset_entity.DatabaseConfig) string {
+	if cfg.Driver == asset_entity.DriverSQLite {
+		return fmt.Sprintf("%d", assetID)
+	}
+	return fmt.Sprintf("%d:%s", assetID, cfg.Database)
+}
+
+func finishPanelDBOperation(opErr error, cleanup func() error) error {
+	if cleanup == nil {
+		return opErr
+	}
+	if cleanupErr := cleanup(); cleanupErr != nil {
+		return errors.Join(opErr, fmt.Errorf("释放数据库连接失败: %w", cleanupErr))
+	}
+	return opErr
 }
 
 // getOrDialPanelRedis 从面板缓存取 *redis.Client。
 func (q *Query) getOrDialPanelRedis(ctx context.Context, asset *asset_entity.Asset, cfg *asset_entity.RedisConfig, password string) (*redis.Client, error) {
 	key := fmt.Sprintf("%d:%d", asset.ID, cfg.Database)
 	client, _, err := q.redisPanelCache.GetOrDial(key, func() (*redis.Client, io.Closer, error) {
+		cfg.Proxy = credential_resolver.Default().DecryptProxyPassword(cfg.Proxy)
 		return connpool.DialRedis(ctx, asset, cfg, password, q.pool)
 	})
 	if err != nil {
@@ -51,6 +73,7 @@ func (q *Query) getOrDialPanelRedis(ctx context.Context, asset *asset_entity.Ass
 func (q *Query) getOrDialPanelMongo(ctx context.Context, asset *asset_entity.Asset, cfg *asset_entity.MongoDBConfig, password string) (*connpool.MongoClientCloser, error) {
 	key := fmt.Sprintf("%d", asset.ID)
 	wrapped, _, err := q.mongoPanelCache.GetOrDial(key, func() (*connpool.MongoClientCloser, io.Closer, error) {
+		cfg.Proxy = credential_resolver.Default().DecryptProxyPassword(cfg.Proxy)
 		client, closer, derr := connpool.DialMongoDB(ctx, asset, cfg, password, q.pool)
 		if derr != nil {
 			return nil, nil, derr
@@ -81,6 +104,7 @@ func (q *Query) testDatabaseConnection(ctx context.Context, configJSON string, p
 	}
 
 	testAsset := &asset_entity.Asset{}
+	cfg.Proxy = credential_resolver.Default().DecryptProxyPassword(cfg.Proxy)
 	db, tunnel, err := connpool.DialDatabase(ctx, testAsset, &cfg, password, q.pool)
 	if err != nil {
 		return err
@@ -116,6 +140,7 @@ func (q *Query) testRedisConnection(ctx context.Context, configJSON string, plai
 	}
 
 	testAsset := &asset_entity.Asset{}
+	cfg.Proxy = credential_resolver.Default().DecryptProxyPassword(cfg.Proxy)
 	client, tunnel, err := connpool.DialRedis(ctx, testAsset, &cfg, password, q.pool)
 	if err != nil {
 		return err
@@ -157,12 +182,15 @@ func (q *Query) ExecuteSQL(assetID int64, sqlText string, database string) (stri
 	ctx, cancel := context.WithTimeout(i18n.Ctx(q.ctx, q.lang.Lang()), 30*time.Second)
 	defer cancel()
 
-	db, err := q.getOrDialPanelDB(ctx, asset, cfg, password)
+	db, cleanup, err := q.getOrDialPanelDB(ctx, asset, cfg, password)
 	if err != nil {
 		return "", fmt.Errorf("连接数据库失败: %w", err)
 	}
-
-	return helper.ExecuteSQL(ctx, db, sqlText)
+	result, err := helper.ExecuteSQL(ctx, db, sqlText)
+	if err := finishPanelDBOperation(err, cleanup); err != nil {
+		return "", err
+	}
+	return result, nil
 }
 
 // ExecuteTableImport executes a prepared table import batch on one database session.
@@ -193,22 +221,27 @@ func (q *Query) ExecuteTableImport(
 	ctx, cancel := context.WithTimeout(i18n.Ctx(q.ctx, q.lang.Lang()), 30*time.Minute)
 	defer cancel()
 
-	db, err := q.getOrDialPanelDB(ctx, asset, cfg, password)
+	db, cleanup, err := q.getOrDialPanelDB(ctx, asset, cfg, password)
 	if err != nil {
 		return nil, fmt.Errorf("连接数据库失败: %w", err)
 	}
-
 	conn, err := db.Conn(ctx)
 	if err != nil {
+		if cleanupErr := finishPanelDBOperation(nil, cleanup); cleanupErr != nil {
+			return nil, errors.Join(fmt.Errorf("打开数据库会话失败: %w", err), cleanupErr)
+		}
 		return nil, fmt.Errorf("打开数据库会话失败: %w", err)
 	}
-	defer func() {
-		if err := conn.Close(); err != nil {
-			logger.Default().Warn("close db session failed", zap.Error(err))
-		}
-	}()
 
-	return query_svc.RunTableImportBatch(ctx, query_svc.NewSQLSession(conn), cfg.Driver, request)
+	result, err := query_svc.RunTableImportBatch(ctx, query_svc.NewSQLSession(conn), cfg.Driver, request)
+	if closeErr := conn.Close(); closeErr != nil && !isExpectedPanelCloseErr(closeErr) {
+		logger.Default().Warn("close db session failed", zap.Error(closeErr))
+		err = errors.Join(err, fmt.Errorf("关闭数据库会话失败: %w", closeErr))
+	}
+	if err := finishPanelDBOperation(err, cleanup); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // OpenTable 一次性返回打开数据表所需的首屏数据。
@@ -235,18 +268,20 @@ func (q *Query) OpenTable(assetID int64, database, table string, pageSize int) (
 	ctx, cancel := context.WithTimeout(i18n.Ctx(q.ctx, q.lang.Lang()), 30*time.Second)
 	defer cancel()
 
-	db, err := q.getOrDialPanelDB(ctx, asset, cfg, password)
+	db, cleanup, err := q.getOrDialPanelDB(ctx, asset, cfg, password)
 	if err != nil {
 		return "", fmt.Errorf("连接数据库失败: %w", err)
 	}
-
-	result, err := query_svc.OpenTable(ctx, db, cfg.Driver, cfg.Database, table, pageSize)
-	if err != nil {
-		return "", err
+	result, opErr := query_svc.OpenTable(ctx, db, cfg.Driver, cfg.Database, table, pageSize)
+	var payload []byte
+	if opErr == nil {
+		payload, err = json.Marshal(result)
+		if err != nil {
+			opErr = fmt.Errorf("序列化结果失败: %w", err)
+		}
 	}
-	payload, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("序列化结果失败: %w", err)
+	if err := finishPanelDBOperation(opErr, cleanup); err != nil {
+		return "", err
 	}
 	return string(payload), nil
 }
@@ -275,12 +310,15 @@ func (q *Query) ExecuteSQLPaged(assetID int64, sqlText string, database string, 
 	ctx, cancel := context.WithTimeout(i18n.Ctx(q.ctx, q.lang.Lang()), 30*time.Second)
 	defer cancel()
 
-	db, err := q.getOrDialPanelDB(ctx, asset, cfg, password)
+	db, cleanup, err := q.getOrDialPanelDB(ctx, asset, cfg, password)
 	if err != nil {
 		return "", fmt.Errorf("连接数据库失败: %w", err)
 	}
-
-	return helper.ExecuteSQLPaged(ctx, db, sqlText, page, pageSize, cfg.Driver)
+	result, err := helper.ExecuteSQLPaged(ctx, db, sqlText, page, pageSize, cfg.Driver)
+	if err := finishPanelDBOperation(err, cleanup); err != nil {
+		return "", err
+	}
+	return result, nil
 }
 
 // ExecuteRedis 在指定 Redis 资产上执行命令
@@ -331,6 +369,7 @@ func (q *Query) testMongoConnection(ctx context.Context, configJSON string, plai
 	}
 
 	testAsset := &asset_entity.Asset{}
+	cfg.Proxy = credential_resolver.Default().DecryptProxyPassword(cfg.Proxy)
 	client, tunnel, err := connpool.DialMongoDB(ctx, testAsset, &cfg, password, q.pool)
 	if err != nil {
 		return err

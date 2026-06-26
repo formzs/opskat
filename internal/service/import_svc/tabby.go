@@ -3,6 +3,7 @@ package import_svc
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -95,6 +96,7 @@ type tabbyOptions struct {
 	Port           int                  `yaml:"port"`
 	User           string               `yaml:"user"`
 	Auth           string               `yaml:"auth"`
+	PrivateKey     string               `yaml:"privateKey"`
 	PrivateKeys    []string             `yaml:"privateKeys"`
 	ForwardedPorts []tabbyForwardedPort `yaml:"forwardedPorts"`
 	SocksProxyHost string               `yaml:"socksProxyHost"`
@@ -130,17 +132,9 @@ func PreviewTabbyConfig(ctx context.Context, data []byte) (*PreviewResult, error
 	}
 
 	// 加载已有资产用于重复检测
-	existingAssets, err := asset_svc.Asset().List(ctx, asset_entity.AssetTypeSSH, 0)
+	existingMap, err := existingSSHAssetMap(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("查询已有资产失败: %w", err)
-	}
-	existingSet := make(map[string]bool, len(existingAssets))
-	for _, a := range existingAssets {
-		sshCfg, err := a.GetSSHConfig()
-		if err != nil {
-			continue
-		}
-		existingSet[fmt.Sprintf("%s:%d:%s", sshCfg.Host, sshCfg.Port, sshCfg.Username)] = true
+		return nil, err
 	}
 
 	var items []PreviewItem
@@ -165,7 +159,7 @@ func PreviewTabbyConfig(ctx context.Context, data []byte) (*PreviewResult, error
 
 		exists := false
 		if host != "" {
-			exists = existingSet[fmt.Sprintf("%s:%d:%s", host, port, username)]
+			exists = existingMap[sshAssetKey(host, port, username)] != nil
 		}
 
 		items = append(items, PreviewItem{
@@ -174,7 +168,7 @@ func PreviewTabbyConfig(ctx context.Context, data []byte) (*PreviewResult, error
 			Host:        host,
 			Port:        port,
 			Username:    username,
-			AuthType:    mapAuthType(p.Options.Auth),
+			AuthType:    tabbyAuthType(p.Options),
 			GroupID:     p.Group,
 			Exists:      exists,
 			HasPassword: hasVault, // vault 存在时所有 profile 可能有密码
@@ -236,18 +230,11 @@ func ImportTabbySelected(ctx context.Context, data []byte, selectedIndexes []int
 	}
 
 	// 加载已有资产用于重复检测和覆盖
-	existingAssets, err := asset_svc.Asset().List(ctx, asset_entity.AssetTypeSSH, 0)
+	existingAssets, err := listSSHAssets(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("查询已有资产失败: %w", err)
+		return nil, err
 	}
-	existingMap := make(map[string]*asset_entity.Asset, len(existingAssets))
-	for _, a := range existingAssets {
-		sshCfg, err := a.GetSSHConfig()
-		if err != nil {
-			continue
-		}
-		existingMap[fmt.Sprintf("%s:%d:%s", sshCfg.Host, sshCfg.Port, sshCfg.Username)] = a
-	}
+	existingMap := buildSSHAssetMap(existingAssets)
 
 	existingGroups, err := group_repo.Group().List(ctx)
 	if err != nil {
@@ -283,7 +270,7 @@ func ImportTabbySelected(ctx context.Context, data []byte, selectedIndexes []int
 			continue
 		}
 
-		dupKey := fmt.Sprintf("%s:%d:%s", host, port, username)
+		dupKey := sshAssetKey(host, port, username)
 		existingAsset := existingMap[dupKey]
 
 		if existingAsset != nil && !opts.Overwrite {
@@ -305,14 +292,8 @@ func ImportTabbySelected(ctx context.Context, data []byte, selectedIndexes []int
 			}
 		}
 
-		authType := mapAuthType(profile.Options.Auth)
-		var privateKeys []string
-		for _, pk := range profile.Options.PrivateKeys {
-			pk = strings.TrimPrefix(pk, "file://")
-			if pk != "" {
-				privateKeys = append(privateKeys, pk)
-			}
-		}
+		privateKeys := tabbyPrivateKeys(profile.Options)
+		authType := tabbyAuthType(profile.Options)
 
 		var proxyCfg *asset_entity.ProxyConfig
 		if profile.Options.SocksProxyHost != "" {
@@ -340,11 +321,9 @@ func ImportTabbySelected(ctx context.Context, data []byte, selectedIndexes []int
 		}
 
 		if existingAsset != nil && opts.Overwrite {
-			// 覆盖模式：保留已有密码（如果新数据没有密码）
-			if sshCfg.Password == "" {
-				if oldCfg, err := existingAsset.GetSSHConfig(); err == nil && oldCfg.Password != "" {
-					sshCfg.Password = oldCfg.Password
-				}
+			// 覆盖模式：用旧配置补齐新数据缺失的敏感字段（密码/凭证/密钥/passphrase）
+			if oldCfg, err := existingAsset.GetSSHConfig(); err == nil {
+				preserveSSHSecretsOnOverwrite(oldCfg, sshCfg)
 			}
 			existingAsset.Name = name
 			if groupID != 0 {
@@ -425,14 +404,52 @@ func encryptPassword(password string) (string, error) {
 }
 
 func mapAuthType(tabbyAuth string) string {
-	switch strings.ToLower(tabbyAuth) {
-	case "publickey":
+	switch strings.ToLower(strings.TrimSpace(tabbyAuth)) {
+	case "key", "privatekey", "private_key", "publickey", "public_key":
 		return asset_entity.AuthTypeKey
 	case "password":
 		return asset_entity.AuthTypePassword
 	default:
 		return asset_entity.AuthTypePassword
 	}
+}
+
+func tabbyAuthType(opts tabbyOptions) string {
+	authType := mapAuthType(opts.Auth)
+	if authType == asset_entity.AuthTypePassword && strings.TrimSpace(opts.Auth) == "" && len(tabbyPrivateKeys(opts)) > 0 {
+		return asset_entity.AuthTypeKey
+	}
+	return authType
+}
+
+func tabbyPrivateKeys(opts tabbyOptions) []string {
+	keys := make([]string, 0, 1+len(opts.PrivateKeys))
+	keys = append(keys, opts.PrivateKey)
+	keys = append(keys, opts.PrivateKeys...)
+
+	privateKeys := make([]string, 0, len(keys))
+	for _, pk := range keys {
+		pk = normalizeTabbyPrivateKey(pk)
+		if pk != "" {
+			privateKeys = append(privateKeys, pk)
+		}
+	}
+	return privateKeys
+}
+
+func normalizeTabbyPrivateKey(path string) string {
+	path = strings.TrimPrefix(strings.TrimSpace(path), "file://")
+	if decoded, err := url.PathUnescape(path); err == nil {
+		path = decoded
+	}
+	if len(path) >= 3 && path[0] == '/' && path[2] == ':' && isASCIIAlpha(path[1]) {
+		path = path[1:]
+	}
+	return path
+}
+
+func isASCIIAlpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 func groupCacheKey(parentID int64, name string) string {
@@ -448,12 +465,32 @@ func buildGroupCache(groups []*group_entity.Group) map[string]int64 {
 }
 
 func ensureGroupByName(ctx context.Context, name string, cache map[string]int64) (int64, error) {
-	key := groupCacheKey(0, name)
+	return ensureGroupByParent(ctx, 0, name, cache)
+}
+
+func ensureGroupPath(ctx context.Context, path string, cache map[string]int64) (int64, error) {
+	parentID := int64(0)
+	for _, part := range strings.Split(path, ">") {
+		name := strings.TrimSpace(part)
+		if name == "" {
+			continue
+		}
+		id, err := ensureGroupByParent(ctx, parentID, name, cache)
+		if err != nil {
+			return 0, err
+		}
+		parentID = id
+	}
+	return parentID, nil
+}
+
+func ensureGroupByParent(ctx context.Context, parentID int64, name string, cache map[string]int64) (int64, error) {
+	key := groupCacheKey(parentID, name)
 	if id, ok := cache[key]; ok {
 		return id, nil
 	}
 	now := time.Now().Unix()
-	group := &group_entity.Group{Name: name, ParentID: 0, Icon: "folder", Createtime: now, Updatetime: now}
+	group := &group_entity.Group{Name: name, ParentID: parentID, Icon: "folder", Createtime: now, Updatetime: now}
 	if err := group_repo.Group().Create(ctx, group); err != nil {
 		return 0, err
 	}

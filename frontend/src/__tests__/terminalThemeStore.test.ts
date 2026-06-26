@@ -47,6 +47,7 @@ describe("terminalThemeStore", () => {
       enableImagePreview: true,
       webglEnabled: true,
       highlightLinks: false,
+      copyBehavior: "popover-menu",
     });
   });
 
@@ -88,6 +89,18 @@ describe("terminalThemeStore", () => {
 
       useTerminalThemeStore.getState().setHighlightLinks(false);
       expect(useTerminalThemeStore.getState().highlightLinks).toBe(false);
+    });
+  });
+
+  describe("setCopyBehavior", () => {
+    it("defaults to popover/menu and updates copy behavior", () => {
+      expect(useTerminalThemeStore.getState().copyBehavior).toBe("popover-menu");
+
+      useTerminalThemeStore.getState().setCopyBehavior("select-copy-right-paste");
+      expect(useTerminalThemeStore.getState().copyBehavior).toBe("select-copy-right-paste");
+
+      useTerminalThemeStore.getState().setCopyBehavior("smart-right-click");
+      expect(useTerminalThemeStore.getState().copyBehavior).toBe("smart-right-click");
     });
   });
 

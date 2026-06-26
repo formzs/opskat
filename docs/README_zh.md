@@ -7,7 +7,10 @@
 OpsKat
 </h1>
 
-<p align="center">开源的 AI 优先桌面运维工具。描述你的需求，AI Agent 代你执行，每一步都有策略管控和完整审计日志。</p>
+<p align="center">
+<b>一站式服务器运维工作台</b><br/>
+SSH、数据库、Redis、Kafka、Kubernetes…… 运维要碰的一切，统一在一个跨平台桌面应用里。还能让 AI 用自然语言替你执行，每一步都有策略与审计护航。
+</p>
 
 <p align="center">
 <a href="https://opskat.dev/">官网</a> ·
@@ -22,50 +25,54 @@ OpsKat
   &nbsp;
   <img src="https://img.shields.io/badge/Wails-v2-EB4034?style=for-the-badge&logo=wails&logoColor=white" alt="Wails">
   &nbsp;
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=for-the-badge&logo=windows&logoColor=white" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=for-the-badge&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik0yMCAxNlY3YTIgMiAwIDAgMC0yLTJINmEyIDIgMCAwIDAtMiAydjltMTYgMEg0bTE2IDAgMS4yOCAyLjU1YTEgMSAwIDAgMS0uOSAxLjQ1SDMuNjJhMSAxIDAgMCAxLS45LTEuNDVMNCAxNiIvPjwvc3ZnPg%3D%3D" alt="Platform">
+</p>
+
+<p align="center">
+  <a href="https://t.me/opskat"><img src="https://img.shields.io/badge/Telegram-OpsKat-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram"></a>
+  &nbsp;
+  <a href="https://qm.qq.com/q/sERnNKEzeg"><img src="https://img.shields.io/badge/QQ_群-加入-12B7F5?style=for-the-badge&logo=qq&logoColor=white" alt="QQ 群"></a>
 </p>
 
 <p align="center">
   <img src="images/screenshot-main.png" alt="OpsKat 截图">
 </p>
 
-## 关于
+## 🧭 关于
 
-平时操作服务器环境，经常要打开好几个工具来回切换：SSH、数据库、Redis、Kafka 控制台来回跳。OpsKat 把常用的资产操作都集成在一起，不用再在好几个工具之间跳了。加上 AI Agent，直接跟它说一句话就能搞定，当然每一步都有策略管控和审计日志。
+管服务器平时要在一堆工具之间来回切：SSH 客户端、数据库 GUI、Redis 管理器、Kafka 控制台…… OpsKat 把这些常用的资产操作收进同一个界面，一个应用就够了——光是这样，它就已经是个完整的运维工作台。
 
-目前支持管理 SSH 服务器、MySQL/PostgreSQL 数据库、Redis、MongoDB 和 Kafka，后续还会考虑使用插件模式集成其它常用运维资产。
+在这之上再加一层 AI：直接用自然语言说需求，AI Agent 就替你连上去执行，查日志、跑 SQL、看集群状态都能交给它。每一步都有策略管控和完整审计日志兜底，放权给 AI 也安心。
 
 **如果觉得有用，求个 Star ⭐ 这是对我们最大的支持！**
 
-## 介绍视频
+## ⬇️ 安装
 
-https://github.com/user-attachments/assets/5816f1b1-ba90-4a7c-a5a7-cf4c5d7bbb89
+### 下载
 
-## 演示
+到 [Releases 页面](https://github.com/opskat/opskat/releases) 下载对应平台（**macOS / Windows / Linux**）的安装包，下载即用，无需 Go/Node 等开发环境。详细步骤见 [安装文档](https://opskat.dev/docs/getting-started/installation)。
 
-https://github.com/user-attachments/assets/035fc0df-230c-456b-87bd-8a4a125feaec
+### 首次使用
 
-## ✨ 实际使用场景
+1. **添加资产** —— SSH 主机、数据库、Redis 等，也可以从 SSH config / Tabby 导入。
+2. **连接** —— 打开终端、跑查询，或浏览 Key 与集合。
+3. *（可选）* **配置 AI 服务商**，然后直接跟 AI 说你想做什么。
 
-- **"帮我看一下 web-01 上 nginx 最近的错误日志"** → AI 自动 SSH 上去执行命令并返回结果
-- **"统计一下 db-prod 上 users 表各 status 的数量"** → AI 通过 SSH 隧道连数据库执行 SQL
-- **"列出 kafka-prod 里有延迟的消费组"** → AI 在策略管控下读取 Kafka 元数据和消费组延迟
-- **"检查一下 k3s 集群的健康状况"** → AI 自动跑 kubectl 相关命令，汇总节点和 Pod 状态
+## 📦 支持的资产
 
-## 🛡️ 安全与审计
+| 分类 | 资产 |
+| :-- | :-- |
+| **服务器** | <img src="https://img.shields.io/badge/SSH-4D4D4D?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxyZWN0IHdpZHRoPSIyMCIgaGVpZ2h0PSIxNCIgeD0iMiIgeT0iMyIgcng9IjIiLz48bGluZSB4MT0iOCIgeDI9IjE2IiB5MT0iMjEiIHkyPSIyMSIvPjxsaW5lIHgxPSIxMiIgeDI9IjEyIiB5MT0iMTciIHkyPSIyMSIvPjwvc3ZnPg%3D%3D" alt="SSH"> <img src="https://img.shields.io/badge/Serial-5A6B7B?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxjaXJjbGUgY3g9IjEwIiBjeT0iNyIgcj0iMSIvPjxjaXJjbGUgY3g9IjQiIGN5PSIyMCIgcj0iMSIvPjxwYXRoIGQ9Ik00LjcgMTkuMyAxOSA1Ii8%2BPHBhdGggZD0ibTIxIDMtMyAxIDIgMloiLz48cGF0aCBkPSJNOS4yNiA3LjY4IDUgMTJsMiA1Ii8%2BPHBhdGggZD0ibTEwIDE0IDUgMiAzLjUtMy41Ii8%2BPHBhdGggZD0ibTE4IDEyIDEtMSAxIDEtMSAxWiIvPjwvc3ZnPg%3D%3D" alt="Serial"> |
+| **数据库** | <img src="https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL"> <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL"> <img src="https://img.shields.io/badge/SQL_Server-CC2927?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyBmaWxsPSJ3aGl0ZSIgcm9sZT0iaW1nIiB2aWV3Qm94PSIwIDAgMjQgMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI%2BPHBhdGggZD0iTTQuNzI0IDIuNTA1cy0uMDguMTI3LS4wMDQuMzE1Yy4wNDYuMTE2LjE4Ni4yNTYuMzQuNDA0IDAgMCAxLjYxNSAxLjU3NiAxLjgxMyAxLjgwNC44OTUgMS4wMzMgMS4yODQgMi4wNSAxLjMyIDMuNDUzLjAyMi45LS4xNTEgMS42OTItLjU3MyAyLjYxMy0uNzU2IDEuNjQ5LTIuMzUgMy40NjgtNC44MSA1LjQ5bC4zNi0uMTJjLjIzMy0uMTczLjU0OC0uMzU5IDEuMjkyLS43NjYgMS43MTMtLjkzNiAzLjYzNi0xLjc5OCA1Ljk5OS0yLjY4NiAzLjM5OS0xLjI3NyA4Ljk5LTIuNzc2IDEyLjE3Mi0zLjI2M2wuMzMxLS4wNTEtLjA1LS4wOGMtLjI5Mi0uNDUyLS40OS0uNzMxLS43My0xLjAyNy0uNjk3LS44NjMtMS41NDItMS41NjctMi41NzctMi4xNDYtMS40MjItLjc5Ny0zLjI2Ny0xLjQxNi01LjYtMS44OGE2Ny45MyA2Ny45MyAwIDAwLTIuMTkxLS4zNzUgMjA5LjI5IDIwOS4yOSAwIDAxLTMuOTI0LS42NGMtLjQyNS0uMDc1LTEuMDYtLjE4MS0xLjQ4MS0uMjcyYTkuNDA0IDkuNDA0IDAgMDEtLjk2MS0uMjU4Yy0uMjY4LS4xMDUtLjY0NS0uMjA3LS43MjYtLjUxNXptLjkzNi45MDljLjAwMy0uMDAyLjA2My4wMTcuMTM3LjA0Mi4xMzYuMDQ2LjMxNi4xLjUyNi4xNTkuMTQ2LjA0LjMwNy4wODQuNDc5LjEyNy4yMTguMDU2LjM5OS4xMDQuNDAxLjEwNy4wMjQuMDI3LjM5MSAxLjE5OC41MTYgMS42NDcuMDQ4LjE3Mi4wODQuMzE1LjA4MS4zMThhLjc4OS43ODkgMCAwMS0uMDktLjE0Yy0uNDI0LS43NDYtMS4wOTctMS41MDUtMS44NzQtMi4xMTZhMy4xMDQgMy4xMDQgMCAwMS0uMTc2LS4xNDR6bTEuNzkuNDk0Yy4wMTgtLjAwMS4wOTkuMDEyLjE5NS4wMzQuNjE5LjEzNiAxLjcyNS4zNSAyLjQzNS40Ny4xMTkuMDIuMjE2LjA0LjIxNi4wNDdhLjM0OC4zNDggMCAwMS0uMDk4LjA2MmMtLjExOS4wNi0uNjAyLjM0OS0uNzYzLjQ1Ny0uNDAzLjI3LS43NjYuNTU5LTEuMDMuODIxYTUuNCA1LjQgMCAwMS0uMTk3LjE5MmMtLjAwMyAwLS4wMjItLjA2Mi0uMDQxLS4xMzdhMTIuMDkgMTIuMDkgMCAwMC0uNjUtMS43NzkgMS44MDEgMS44MDEgMCAwMS0uMDcxLS4xNjVjMC0uMDAxIDAtLjAwMi4wMDQtLjAwMnptMy4xNDcuNTk4Yy4wMi4wMDcuMDYuMTMuMTI5LjQwNGE2LjA1IDYuMDUgMCAwMS4xNTMgMS45NzdsLS4wMTIuMDM4LS4xODctLjA2Yy0uMzg4LS4xMjQtMS4wMi0uMzEtMS41NjItLjQ2YTYuNjI1IDYuNjI1IDAgMDEtLjU2LS4xN2MwLS4wMjIuNDQ5LS40NzEuNjQyLS42NDIuMzY5LS4zMjYgMS4zNjItMS4wOTggMS4zOTctMS4wODd6bS4yNS4wMzZjLjAxMS0uMDEgMS41MDQuMjQ4IDIuMTgyLjM3OC41MDYuMDk3IDEuMjM3LjI1IDEuMjgxLjI2OS4wMjIuMDA4LS4wNTQuMDUtLjI5Ny4xNi0uOTYuNDMyLTEuNjcyLjgyLTIuMzggMS4yOTMtLjE4Ni4xMjQtLjM0MS4yMjYtLjM0NC4yMjYtLjAwNCAwLS4wMDYtLjEwNC0uMDA2LS4yMyAwLS42OS0uMTM5LTEuMzg3LS4zOTEtMS45NzZhLjY4OC42ODggMCAwMS0uMDQ1LS4xMnptMy44Ni43NjRjLjAxMS4wMTEtLjAzOC4zMDYtLjA4LjQ4LS4xMzIuNTQtLjQ4MiAxLjM0NC0uOTE0IDIuMDk5YTIuMjYgMi4yNiAwIDAxLS4xNTIuMjQ2IDEuNDk5IDEuNDk5IDAgMDEtLjIxOS0uMTE1Yy0uNDIyLS4yNDctLjktLjQ4LTEuNDI1LS42OTdhNC41ODggNC41ODggMCAwMS0uMjc4LS4xMmMtLjAyNC0uMDIyIDEuMTQzLS43OTUgMS43NjItMS4xNjYuNDk1LS4yOTcgMS4yOTItLjc0MSAxLjMwNi0uNzI3em0uMjc2LjA0M2MuMDMzIDAgLjY5NS4xOCAxLjAzNy4yODMuODUzLjI1NSAxLjgzNy42MTQgMi40NzUuOTA0bC4yNjUuMTItLjE4Ny4wNDNjLTEuNTYxLjM2LTIuOS43NzMtNC4xODggMS4yOTYtLjEwNy4wNDQtLjIuMDgtLjIwNy4wOGEuOTExLjkxMSAwIDAxLjA3NS0uMTg1Yy4zODgtLjgyMy42MzgtMS42ODcuNzAzLTIuNDIuMDA2LS4wNjcuMDE4LS4xMjEuMDI3LS4xMjF6bS02LjU4IDEuNTEyYy4wMS0uMDEuNTE0LjEwOC43ODkuMTg1LjQxMy4xMTYgMS4yOTIuNDEgMS4yOTIuNDMzIDAgLjAwNC0uMDk3LjA4OS0uMjE1LjE4OC0uNDc1LjM5Ny0uOTM0LjgxMy0xLjQ4MyAxLjM0M2E1LjI3IDUuMjcgMCAwMS0uMzA4LjI4NWMtLjAwNyAwLS4wMS0uMDIzLS4wMDYtLjA1LjA4My0uNjExLjA2NS0xLjM5NS0uMDUtMi4xOTNhMS4yOSAxLjI5IDAgMDEtLjAyLS4xOXptMTAuNjEuMDFjLjAwNy4wMDgtLjIzNC4zODUtLjM4NC42LS4yMi4zMTQtLjUzNy43MjYtMS4yNjEgMS42MzdsLS45NTQgMS4yMDJhOS40MTggOS40MTggMCAwMS0uMjY5LjMzM2MtLjAwMyAwLS4wNS0uMDY2LS4xMDMtLjE0NmE3LjU4NCA3LjU4NCAwIDAwLTEuNDctMS42MjUgOS41OSA5LjU5IDAgMDAtLjI3LS4yMTguNDI3LjQyNyAwIDAxLS4wNzQtLjA2M2MwLS4wMS42MTctLjI3NCAxLjA4OC0uNDY2YTM3LjAyIDM3LjAyIDAgMDEyLjc3OC0uOTljLjQ0Mi0uMTM1LjkxMi0uMjcuOTE5LS4yNjR6bS4yNzguMDczYS45My45MyAwIDAxLjIwNy4xIDEyLjI3NCAxMi4yNzQgMCAwMTIuNDI4IDEuODI0Yy4xOTQuMTkuNjY3LjY4My42Ni42ODdsLS4zNjMuMDI5Yy0xLjUzLjExNS0zLjQ4Ni40NC01LjM3Ljg5My0uMTI4LjAzLS4yMzguMDU2LS4yNDYuMDU2LS4wMDcgMCAuMTMzLS4xNC4zMTEtLjMxMiAxLjEwNy0xLjA2MyAxLjYxMS0xLjczNCAyLjIwNS0yLjkzNC4wODgtLjE3OC4xNjMtLjMzMy4xNjYtLjM0MmguMDAyem0tOC4wODguODNjLjA1MS4wMS41MjMuMjMuODc5LjQwOC4zMjUuMTYzLjgxOC40MjYuODQzLjQ0OS4wMDMuMDAzLS4xNy4wOTMtLjM4Ni4yMDEtLjY4My4zNDItMS4yNjguNjY0LTEuODc4IDEuMDM3LS4xNzUuMTA3LS4zMi4xOTQtLjMyNS4xOTQtLjAxNSAwLS4wMS0uMDEzLjA4OC0uMTkxYTcuNzAyIDcuNzAyIDAgMDAuNzM4LTIuMDAyYy4wMTQtLjA2Mi4wMy0uMS4wNDEtLjA5N3ptLS40NzUuMDg0Yy4wMS4wMS0uMTEyLjQ2LS4xOS43YTkuMDkyIDkuMDkyIDAgMDEtLjgzNSAxLjgwOGwtLjA5LjE0Ny0uMjAzLS4xOTdhMi42NzEgMi42NzEgMCAwMC0uNjc2LS41IDEuMDA5IDEuMDA5IDAgMDEtLjE3Ni0uMTAyYzAtLjAzLjYyLS41OTMgMS4wOTgtLjk5OC4zNDMtLjI5IDEuMDY0LS44NjcgMS4wNzItLjg1OHptMi44ODggMS4xODhsLjE3Ny4xMTVjLjQwNy4yNjQuODg4LjYxOSAxLjI1NS45MjQuMjA2LjE3Mi42MDUuNTMuNjg3LjYxNmwuMDQ0LjA0Ny0uMjk0LjA4MmE1My44IDUzLjggMCAwMC00LjQ1IDEuNDI0Yy0uMTY3LjA2MS0uMzEuMTEyLS4zMi4xMTItLjAyMSAwLS4wNDIuMDE5LjMzMy0uMzI2Ljk2LS44ODMgMS44MDctMS44NTYgMi40NC0yLjgwMnptLS43NTkuMTljLjAwOS4wMDktLjQ5Mi43MS0uNzg5IDEuMTA2LS4zNTYuNDczLS45OSAxLjI2NS0xLjQyNiAxLjc4YTguNzY5IDguNzY5IDAgMDEtLjM0Ni4zOTdjLS4wMS4wMDMtLjAxNS0uMDUtLjAxNi0uMTMzIDAtLjQ0LS4xMTItLjkxLS4zMDgtMS4zMDgtLjA4My0uMTY4LS4wOTctLjIwOC0uMDgtLjIyNC4wNjgtLjA2MiAxLjEyNy0uNjY2IDEuNzk0LTEuMDIzLjQ1OS0uMjQ2IDEuMTYzLS42MDQgMS4xNzEtLjU5NXptLTQuNTkgMS4xMjVhMy45ODggMy45ODggMCAwMS44MTIuNTE4Yy4wMDguMDA1LS4wODcuMDgzLS4yMS4xNzItLjM0NS4yNDktLjg3LjY0NC0xLjE3My44ODYtLjMyLjI1NS0uMzMxLjI2My0uMjk1LjIwNy4yNC0uMzY3LjM2LS41NzQuNDg2LS44NC4xMTMtLjIzNi4yMjQtLjUxNi4zMDQtLjc2YS42NzUuNjc1IDAgMDEuMDc3LS4xODN6bTEuMjIzLjk2Yy4wMTctLjAwMy4wNC4wMjguMTM5LjE3NS4yMDcuMzEuMzY2LjcyMi40MDcgMS4wNThsLjAwOC4wNzMtLjQ5Ny4xOTJjLS44OS4zNDYtMS43MTEuNjg3LTIuMjY2Ljk0LS4xNTUuMDcyLS40MjguMjAyLS42MDcuMjkyLS4xNzkuMDktLjMyNS4xNi0uMzI1LjE1NiAwLS4wMDQuMTEyLS4wODkuMjUtLjE4OCAxLjA4Ny0uNzkgMi4wMjUtMS42NTQgMi43MzItMi41MTkuMDc1LS4wOTIuMTQ0LS4xNzIuMTUzLS4xNzhhLjAxNi4wMTYgMCAwMS4wMDYtLjAwMnptLS41NjQuMTRjLjAxNS4wMTQtLjQwMS40ODQtLjY4MS43Ny0uNy43MTUtMS4zOTYgMS4yNzUtMi4yNTYgMS44MjEtLjEwOC4wNjktLjIwNi4xMy0uMjIuMTM4LS4wMjMuMDE0LjAwOC0uMDIyLjM4Ni0uNDM0LjIzOC0uMjU5LjQyLS40NzQuNjI4LS43NDMuMTM2LS4xNzcuMTYyLS4yMDIuMzYyLS4zNDYuNTM3LS4zODggMS43NjctMS4yMjEgMS43ODEtMS4yMDd6TTkuOTI1IDBjLS4wOC0uMDEtMS4zNzEuNDU1LTIuMi43OTEtMS4xMjMuNDU3LTEuOTk2Ljg5NC0yLjUzNCAxLjI3Mi0uMi4xNC0uNDUyLjM5My0uNDg4LjQ5YS4zNTYuMzU2IDAgMDAtLjAyMS4xMjNsLjQ4OC40NiAxLjE1OC4zN0w5LjA4NyA0bDMuMTUzLjU0Mi4wMzItLjI3LS4wMjgtLjAwNS0uNDE1LS4wNjYtLjA4NS0uMTQ4YTI3LjcwMiAyNy43MDIgMCAwMS0xLjE3Ny0yLjMyNSAxMi4yNjQgMTIuMjY0IDAgMDEtLjUzLTEuNDY1QzkuOTY5LjAyIDkuOTYyLjAwNSA5LjkyNSAwem0tLjA2MS4xODZoLjAwNWMuMDAzLjAwMy4wMTcuMTA1LjAzMi4yMjUuMDYyLjUwOC4xNzYgMSAuMzU0IDEuNTMuMTM0LjQuMTM2LjM3Ny0uMDI0LjMzMi0uMzctLjEwMy0yLjAzMi0uMzg4LTMuMjM0LS41NTVhOC43OTYgOC43OTYgMCAwMS0uMzU3LS4wNTNjLS4wMTUtLjAxNS44NjctLjQ3NyAxLjI1OC0uNjYuNTAxLS4yMzIgMS44NjctLjggMS45NjYtLjgxOXpNNi4zNjIgMS44MTRsLjE0MS4wNDhjLjc3Mi4yNjIgMi43MDYuNjMyIDMuNzc1LjcyLjEyLjAxLjIyMi4wMjEuMjI1LjAyNC4wMDMuMDAzLS4xLjA1OC0uMjI4LjEyMi0uNTE1LjI1OC0xLjA4My41NzMtMS40NzYuODE5LS4xMTUuMDcyLS4yMi4xMy0uMjM1LjEyOWE0Ljg2OCA0Ljg2OCAwIDAxLS4xNy0uMDI3bC0uMTQ0LS4wMjMtLjM2NS0uMzU1Yy0uNjQxLS42Mi0xLjE0MS0xLjEtMS4zMzUtMS4yOHptLS4xNDMuMTE0bC41MTEuNjM4Yy4yODIuMzUuNTY0LjY5OS42MjYuNzc0LjA2My4wNzUuMTExLjEzOC4xMDguMTQtLjAxNC4wMTEtLjc0LS4xMy0xLjEyNS0uMjE5YTguNTMyIDguNTMyIDAgMDEtLjgwMy0uMjEybC0uMi0uMDY0LjAwMS0uMDQ5Yy4wMDMtLjI0NS4zMTItLjYwNy44MzYtLjk3NnptNC4zNTIuODY5Yy4wMTUuMDAxLjAzMi4wMzIuMDc3LjEzMS4xMjQuMjcyLjUxIDEuMDA4LjYwMyAxLjE1LjAzLjA0Ny4wOC4wNS0uNDMzLS4wMzMtMS4yMy0uMTk4LTEuNjI5LS4yNjUtMS42MjktLjI3M2EuMzYuMzYgMCAwMS4wODMtLjA1NCA3LjEzIDcuMTMgMCAwMDEuMTA3LS43NjdsLjE3NS0uMTQ3Yy4wMDYtLjAwNS4wMTItLjAwOC4wMTctLjAwN3ptNC4zMDkgOC40MDhsLTQuODA4IDEuNTY4LTQuMTggMS44NDYtMS4xNy4zMWMtLjI5OC4yODItLjYxMy41NjgtLjk0OC44Ni0uMzcuMzIxLS43MTYuNjEyLS45OC44MjJhNy40NiA3LjQ2IDAgMDAtLjk1My45NDVjLS4zMzIuNDE0LS41OTIuODU0LS43MDQgMS4xOTMtLjIuNjEtLjEwMyAxLjIyOC4yODUgMS43OTguNDk1LjcyOCAxLjQ4IDEuNDY4IDIuNjI1IDEuOTcyLjU4NS4yNTYgMS41Ny41ODggMi4zMS43NzQgMS4yMzMuMzEyIDMuNjE0LjY1IDQuOTI2LjcuMjY2LjAxLjYyLjAxLjYzNy0uMDAyLjAyOC0uMDE5LjIzMy0uNDA1LjQ3LS44OS44MDYtMS42NDYgMS4zODktMy4xOSAxLjcwMy00LjUwOC4xOS0uNzk5LjMzOC0xLjg2My40MzQtMy4xMjUuMDI3LS4zNTQuMDM3LTEuNTMzLjAxNi0xLjkzNGExMy41NjQgMTMuNTY0IDAgMDAtLjE4My0xLjcwNi40MzUuNDM1IDAgMDEtLjAxMi0uMTVjLjAxNC0uMDEuMDU5LS4wMjUuNjUtLjE5N3ptLTEuMS42NDVjLjA0NSAwIC4xNiAxLjExNC4xOTEgMS44Mi4wMDYuMTUxLjAwNS4yNDctLjAwNC4yNDctLjAyOCAwLS42MTUtLjM0NS0xLjAzMi0uNjA2YTI4LjcxNiAyOC43MTYgMCAwMS0xLjE2Mi0uNzcyYy0uMDM1LS4wMjgtLjAzMS0uMDI5LjI2Ni0uMTMxLjUwNS0uMTc0IDEuNzA0LS41NTggMS43NDItLjU1OHptLTIuNDQ4LjgwM2MuMDMgMCAuMTE1LjA0Ny4zMTUuMTcyLjc1LjQ3IDEuNzY2IDEuMDM1IDIuMiAxLjIyNS4xMzYuMDYuMTUxLjAzNi0uMTYuMjQ3LS42NjIuNDUtMS40ODYuODkyLTIuNDk3IDEuMzQyYTcuNTkgNy41OSAwIDAxLS4zMzEuMTQyLjk4OS45ODkgMCAwMS4wNDMtLjJjLjI0NS0uOTA1LjM4My0xLjgyLjM4Ny0yLjU1NC4wMDItLjM2Mi4wMDItLjM2NC4wMzctLjM3M2guMDA2em0tLjUwNC4xOTNjLjAyMS4wMjIuMDA2LjgzNC0uMDIgMS4wNTZhOS4yMDYgOS4yMDYgMCAwMS0uNDE4IDEuODM3Yy0uMDE0LjAxNy0uNTExLS40NjgtLjY3Ni0uNjZhNC45MTggNC45MTggMCAwMS0uNjY5LS45NzNjLS4wODItLjE2Mi0uMjE0LS40ODQtLjIwMi0uNDkzLjA1Ni0uMDQgMS45NzEtLjc4IDEuOTg1LS43Njd6bS0yLjM3NS45MzZjLjAwNCAwIC4wMDguMDAxLjAxLjAwNGEuODgxLjg4MSAwIDAxLjA1Ni4xMzFjLjExNi4zMTUuMzc2Ljc4Mi42MDIgMS4wOGE2LjI0NyA2LjI0NyAwIDAwMS4wMTcgMS4wNmMuMDIzLjAyLjAzLjAxNi0uNTYyLjI0YTQ4LjUzIDQ4LjUzIDAgMDEtMi4yOTQuOGMtLjMyNy4xMDYtLjYwNC4xOTUtLjYxNS4yLS4wMzMuMDExLS4wMjMtLjAwOS4wNzMtLjE1OC40MjctLjY2NiAxLjA3My0xLjk3IDEuNDM1LTIuODkyLjA2Mi0uMTYuMTIyLS4zMi4xMzMtLjM1Ni4wMTUtLjA1Mi4wMzEtLjA3LjA4LS4wOTJhLjE0OS4xNDkgMCAwMS4wNjUtLjAxN3ptLS43MjguM2MuMDEuMDA5LS4xNzQuMzk4LS4zNTYuNzUxLS4zNTEuNjg2LS43MzkgMS4zNjEtMS4yNTMgMi4xODVsLS4xODIuMjg4Yy0uMDE4LjAyNy0uMDI2LjAxOC0uMDgyLS4wOTRhMy4zMDcgMy4zMDcgMCAwMS0uMjgtLjg0MiAzLjM5IDMuMzkgMCAwMS4wMi0xLjA4M2MuMDQ3LS4yMjcuMDQ1LS4yMjIuMTUyLS4yNzYuNDYyLS4yMzcgMS45NjYtLjk0MiAxLjk4MS0uOTI5em02LjI2OC4yNTV2LjE1NGEyMC4xMDYgMjAuMTA2IDAgMDEtLjI1NSAyLjk5MiA5LjM2MiA5LjM2MiAwIDAxLTEuODk4LS43ODJjLS4zNTQtLjE5NC0uODY1LS41MDctLjg1LS41MjIuMDAzLS4wMDQuMTU0LS4wODMuMzM0LS4xNzcuNzE0LS4zNyAxLjM5NS0uNzcgMS45ODgtMS4xNjYuMjIyLS4xNDguNTU1LS4zODkuNjI5LS40NTR6TTQuOTgxIDE1LjQxYy4wMTUgMCAuMDExLjAyOC0uMDEyLjE2MWE0LjEzNyA0LjEzNyAwIDAwLS4wNDEuMzljLS4wMy41MzIuMDU3LjkyNC4zMiAxLjQ2LjA3NC4xNS4xMzIuMjc0LjEyOS4yNzYtLjAyNy4wMjMtMi40My43MjYtMy4xODYuOTMzbC0uNDM1LjEyYy0uMDI3LjAwOC0uMDI5LjAwMi0uMDItLjA2LjA4My0uNTMzLjQ5LTEuMjMyIDEuMDU4LTEuODIuMzc4LS4zOS42OC0uNjIyIDEuMTk1LS45MTVhMzAuNzgyIDMwLjc4MiAwIDAxLjk5Mi0uNTQ1em01LjY2OSAxLjAxNWMuMDAyLS4wMDIuMDkxLjA0NS4xOTcuMTA3Ljc3Ny40NDkgMS44Ni44NyAyLjc4MyAxLjA4MWwuMDg0LjAyLS4xMTUuMDYzYy0uNDgyLjI2OC0yLjA3MS45MjktMy42OTQgMS41MzdhNjguODIgNjguODIgMCAwMC0uNTEzLjE5NC4zMTQuMzE0IDAgMDEtLjA4Mi4wMjdjMC0uMDA0LjA2Ny0uMTMyLjE0OS0uMjg2LjQ1Ni0uODUyLjkxLTEuODg3IDEuMTQ0LTIuNjA1LjAyMy0uMDczLjA0NC0uMTM1LjA0Ny0uMTM4em0tLjU3OC4xOWExLjM5IDEuMzkgMCAwMS0uMDYzLjE2OSAyMy41MzQgMjMuNTM0IDAgMDEtMS4yNjEgMi41NCA5LjAwOSA5LjAwOSAwIDAxLS4yNTIuNDMzYy0uMDA1IDAtLjExNC0uMDY2LS4yNDQtLjE0NS0uNzctLjQ3Mi0xLjQ1Mi0xLjA1Mi0xLjktMS42MTdsLS4wNjQtLjA4LjMzMi0uMDkxYTIzLjYxNiAyMy42MTYgMCAwMDMuMTktMS4xMDNjLjE0Mi0uMDYuMjYtLjEwOS4yNjItLjEwNnptMy41OSAxLjI1M2MuMDAxIDAgLjAwMi4wMDEuMDAyLjAwMyAwIC4wOC0uMTgzLjgyOC0uMzM2IDEuMzctLjEyOC40NTMtLjIzNi44MDgtLjQzNSAxLjQzN2E4LjUzMyA4LjUzMyAwIDAxLS4xNjguNTA0IDE1LjAwNCAxNS4wMDQgMCAwMS0zLS44NDEgNy45NjQgNy45NjQgMCAwMS0uNjM5LS4yODNjLS4wMDYtLjAwNy4yMTMtLjExLjQ4Ni0uMjMgMS42NTUtLjcyMSAzLjM2OS0xLjU0MyAzLjk1NS0xLjg5NmEuNDMyLjQzMiAwIDAxLjEzNS0uMDY0em0tOC4yODcuMjgzYy4wMDkuMDA5LS40NTQuNjcxLTEuMSAxLjU3NmwtLjU4Ny44MjNjLS4wOTcuMTM5LS4yNDUuMzU4LS4zMjkuNDg4bC0uMTUzLjIzNi0uMTYyLS4xMzdjLS4xOTEtLjE2LS41MjUtLjUwMS0uNjc3LS42OS0uMzEyLS4zODktLjUyMy0uNzk4LS42MDctMS4xNzQtLjAzOC0uMTc0LS4wNC0uMjYyLS4wMDMtLjI3M2ExNzYuMjYgMTc2LjI2IDAgMDExLjkzNC0uNDU1bDEuMy0uMzA1Yy4yMDktLjA1LjM4Mi0uMDkuMzg0LS4wODl6bS40NjUuMTc4bC4xMTcuMTMxYTYuNzYzIDYuNzYzIDAgMDAxLjcwNiAxLjM5NGMuMTE1LjA2Ni4yMDIuMTI0LjE5NS4xMjhhMjgxLjk2NyAyODEuOTY3IDAgMDEtNC4zMyAxLjUzLjg1OC44NTggMCAwMS0uMDcyLS4wNDhsLS4wNjctLjA0OC4xMDUtLjE1MmMuMzQtLjQ5My43NjgtMS4wMzUgMS43MDUtMi4xNjJ6bTIuOSAyLjA3M2MuMDAzLS4wMDMuMTY1LjA1NC4zNjIuMTI4LjQ3My4xNzcuODQ0LjI5MiAxLjM0Ny40MTguNjE3LjE1NSAxLjUxLjMxIDIuMDM4LjM1NC4wOC4wMDYuMTIyLjAxNi4xMS4wMjQtLjAyNS4wMTYtLjU2LjE5NC0uOTUzLjMxOGEyNTguNTI2IDI1OC41MjYgMCAwMS00LjYzNiAxLjM2M2MtLjAzNS4wMDctLjE1Ny0uMDI1LS4xNTctLjA0IDAtLjAwOS4wODctLjExOS4xOTMtLjI0NmEyMi4wMjcgMjIuMDI3IDAgMDAxLjQ3Ni0xLjk4NCA1Ni45IDU2LjkgMCAwMS4yMi0uMzM1em0tLjY0Mi4wMThjLjAwNS4wMDUtLjI1My40MTgtLjcwNiAxLjEzMi0uMTkyLjMwMS0uNDA5LjY0NS0uNDgzLjc2Mi0uMDc1LjExOC0uMTg0LjI5OC0uMjQyLjRsLS4xMDcuMTg1LS4wNTQtLjAxNGMtLjEzLS4wMzUtMS4wNDktLjM2LTEuMjkxLS40NTYtLjMwMS0uMTItLjYxNS0uMjY0LS44NDYtLjM4OS0uMjg5LS4xNTYtLjY1NS0uMzg4LS42MjctLjM5N2wxLjEwNS0uMzAyYzEuNTkyLS40MzQgMi40NzMtLjY4MyAzLjA1LS44NjQuMTA5LS4wMzMuMTk5LS4wNTkuMi0uMDU3em00LjUyMyAxLjA2MWguMDA2Yy4wMTUuMDM4LS41NzUgMS42Ny0uNzkgMi4xODgtLjA0OS4xMTYtLjA2Ni4xNDUtLjA5Mi4xNDNhNTUuNTQgNTUuNTQgMCAwMS0xLjQzMy0uMmMtLjkwNi0uMTM4LTIuNDIzLS40MDMtMi44MDYtLjQ5bC0uMDg5LS4wMi41NDMtLjEyMmMxLjE2NC0uMjYyIDEuNzIzLS40MDMgMi4yOS0uNTc3YTE2LjU0NCAxNi41NDQgMCAwMDIuMTM4LS44MjRjLjExMy0uMDUyLjIxLS4wOTMuMjMzLS4wOThaIi8%2BPC9zdmc%2B" alt="SQL Server"> <img src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite"> <img src="https://img.shields.io/badge/Redis-FF4438?style=flat-square&logo=redis&logoColor=white" alt="Redis"> <img src="https://img.shields.io/badge/MongoDB-47A248?style=flat-square&logo=mongodb&logoColor=white" alt="MongoDB"> <img src="https://img.shields.io/badge/etcd-419EDA?style=flat-square&logo=etcd&logoColor=white" alt="etcd"> |
+| **中间件** | <img src="https://img.shields.io/badge/Apache_Kafka-231F20?style=flat-square&logo=apachekafka&logoColor=white" alt="Kafka"> <img src="https://img.shields.io/badge/Kubernetes-326CE5?style=flat-square&logo=kubernetes&logoColor=white" alt="Kubernetes"> |
 
-给 AI 操作服务器的权限，怎么保证安全？
+_更多资产类型将通过插件模式持续扩展。_
 
-- **操作策略** — SSH 命令、SQL 语句、Redis 操作、MongoDB 操作和 Kafka 动作都支持白名单/黑名单，SQL 还会基于 Parser 自动拦截无 WHERE 的 DELETE/UPDATE 等危险操作
-- **策略组** — 内置常用模板（Linux 只读、危险命令拒绝等），也可以自定义
-- **预申请权限** — AI 或 opsctl 可以提前申请一批命令的执行权限，用户一次审批后，后续匹配的命令自动放行，不用每条都确认
-- **审计日志** — 所有操作自动记录，谁在什么时候对哪台服务器执行了什么命令，决策来源全部可追溯
+## 🖥️ 完整的运维工作台
 
-## 🖥️ 也是个好用的终端和资产管理工具
+就算不开 AI，OpsKat 本身也是一个功能完整的终端和资产管理工具：
 
-抛开 AI 部分，OpsKat 本身也是一个功能完整的终端和资产管理工具：
-
-- 树形分组管理 SSH 服务器、数据库、Redis、MongoDB 和 Kafka
+- 树形分组管理所有支持的资产类型
 - 分屏终端，自定义主题
 - SFTP 文件浏览器
 - 跳板机链式连接
@@ -77,7 +84,40 @@ https://github.com/user-attachments/assets/035fc0df-230c-456b-87bd-8a4a125feaec
 - 凭据加密存储
 - 从 SSH config / Tabby 导入
 
+## 🤖 让 AI 替你操作
+
+配置好 AI 服务商，你就能用自然语言说需求，AI Agent 替你连上去执行：
+
+- **"帮我看一下 web-01 上 nginx 最近的错误日志"** → AI 自动 SSH 上去执行命令并返回结果
+- **"统计一下 db-prod 上 users 表各 status 的数量"** → AI 通过 SSH 隧道连数据库执行 SQL
+- **"列出 kafka-prod 里有延迟的消费组"** → AI 在策略管控下读取 Kafka 元数据和消费组延迟
+- **"检查一下 k3s 集群的健康状况"** → AI 自动跑 kubectl 相关命令，汇总节点和 Pod 状态
+
+### AI 如何工作
+
+- **自带 Key** —— 配置任意 **OpenAI / Anthropic 兼容** 的服务商，API Key 加密存储在本地。
+- **几乎什么模型都能接** —— OpenAI、Anthropic（Claude）、DeepSeek、Gemini、通义千问、智谱 GLM、Kimi、MiniMax…… 也支持自建/本地端点（如 OpenAI 兼容的 Ollama）。
+- **直连** —— OpsKat 直连你配置的模型服务，不经我们的服务器中转，也不绑定任何厂商。
+- **你始终掌控** —— AI 只负责提出操作，真正的命令都从你本机发往你的服务器，并受下面的策略与审计管控。
+
+## 🛡️ 安全与审计
+
+给 AI 操作服务器的权限，怎么保证安全？
+
+- **操作策略** — SSH/串口命令、SQL 语句、Redis、MongoDB、Kafka、Kubernetes 和 etcd 操作都支持白名单/黑名单，SQL 还会基于 Parser 自动拦截无 WHERE 的 DELETE/UPDATE 等危险操作
+- **策略组** — 内置常用模板（Linux 只读、危险命令拒绝等），也可以自定义
+- **预申请权限** — AI 或 opsctl 可以提前申请一批命令的执行权限，用户一次审批后，后续匹配的命令自动放行，不用每条都确认
+- **审计日志** — 所有操作自动记录，谁在什么时候对哪台服务器执行了什么命令，决策来源全部可追溯
+
+## 🎥 演示
+
+https://github.com/user-attachments/assets/5816f1b1-ba90-4a7c-a5a7-cf4c5d7bbb89
+
+https://github.com/user-attachments/assets/035fc0df-230c-456b-87bd-8a4a125feaec
+
 ## ⌨️ opsctl CLI + AI 编程工具集成
+
+> 面向 CLI 用户和 AI 编程助手用户；只用桌面端的话可以跳过。
 
 OpsKat 还提供了独立命令行工具 `opsctl`，主要给 **Claude Code**、**Codex**、**Gemini CLI** 这类 AI 编程助手用。桌面端一键安装 Skill，AI 编程助手就能通过 opsctl 直接管理服务器、查日志、查数据库、排查线上问题。
 
@@ -99,7 +139,9 @@ opsctl ssh web-01
 | 前端 | React 19 + TypeScript + Tailwind CSS |
 | 后端 | Go 1.26、SQLite |
 
-## 🚀 快速开始
+## 🔧 从源码构建
+
+> 面向贡献者；只想使用的话看上面的 **安装** 即可。
 
 **前置依赖：** [Go 1.26+](https://go.dev/)、[Node.js 22+](https://nodejs.org/) + [pnpm](https://pnpm.io/)、[Wails v2 CLI](https://wails.io/docs/gettingstarted/installation)
 
@@ -111,11 +153,23 @@ make build-embed    # 生产构建（内嵌 opsctl）
 make build-cli      # 仅构建 opsctl CLI
 ```
 
+## ❓ 常见问题
+
+**免费吗？** 免费，基于 [GPLv3](../LICENSE) 开源。
+
+**支持哪些模型？要自己的 API Key 吗？** 自带 Key，支持任意 OpenAI / Anthropic 兼容的服务商（OpenAI、Claude、DeepSeek、Gemini、通义千问、智谱 GLM、Kimi 等）。详见 [AI 如何工作](#ai-如何工作)。
+
+**数据会经过你们的服务器吗？** 不会。OpsKat 直连你配置的模型服务和你自己的服务器，不经我们中转，凭据也是本地加密存储。
+
+**不用 AI 行吗？** 完全可以，它本身就是个完整的终端和资产管理工具。
+
+**内网 / 离线能用吗？** 资产连接是直连的，内网可用；AI 部分把模型指向内网或自建端点即可。
+
 ---
 
 ## 🤝 参与贡献
 
-我们欢迎所有形式的贡献！查看 Issues 或提交 Pull Request。
+我们欢迎所有形式的贡献！请先阅读[贡献指南](./CONTRIBUTING_ZH.md)了解开发环境、提交规范和 PR 流程，然后查看 Issues 或提交 Pull Request。
 
 ---
 

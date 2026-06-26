@@ -33,6 +33,30 @@ describe("matchShortcut", () => {
     expect(result).toBe("tab.close");
   });
 
+  it("matches Ctrl+Shift+C to terminal copy by default", () => {
+    const event = makeKeyboardEvent({ code: "KeyC", ctrlKey: true, shiftKey: true });
+    const result = matchShortcut(event, DEFAULT_SHORTCUTS);
+    expect(result).toBe("terminal.copy");
+  });
+
+  it("lets plain Ctrl+C pass through by default", () => {
+    const event = makeKeyboardEvent({ code: "KeyC", ctrlKey: true });
+    const result = matchShortcut(event, DEFAULT_SHORTCUTS);
+    expect(result).toBeNull();
+  });
+
+  it("matches Ctrl+Shift+V to terminal paste by default", () => {
+    const event = makeKeyboardEvent({ code: "KeyV", ctrlKey: true, shiftKey: true });
+    const result = matchShortcut(event, DEFAULT_SHORTCUTS);
+    expect(result).toBe("terminal.paste");
+  });
+
+  it("lets plain Ctrl+V pass through by default", () => {
+    const event = makeKeyboardEvent({ code: "KeyV", ctrlKey: true });
+    const result = matchShortcut(event, DEFAULT_SHORTCUTS);
+    expect(result).toBeNull();
+  });
+
   it("matches Ctrl+Shift+[ to tab.prev", () => {
     const event = makeKeyboardEvent({ code: "BracketLeft", ctrlKey: true, shiftKey: true });
     const result = matchShortcut(event, DEFAULT_SHORTCUTS);

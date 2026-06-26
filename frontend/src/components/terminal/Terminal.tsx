@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  forwardRef,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import type { Terminal as XTerminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
-import { useShortcutStore, formatBinding, formatModKey } from "@/stores/shortcutStore";
+import { ClipboardSetText } from "../../../wailsjs/runtime/runtime";
+import { useShortcutStore, formatBinding } from "@/stores/shortcutStore";
 import { useTerminalStore, TRANSPORTS } from "@/stores/terminalStore";
 import { useTerminalThemeStore, toXtermTheme } from "@/stores/terminalThemeStore";
 import { builtinThemes, defaultLightTheme, defaultDarkTheme } from "@/data/terminalThemes";
@@ -11,6 +22,7 @@ import { useResolvedTheme } from "@/components/theme-provider";
 import { useTranslation } from "react-i18next";
 import { notifyCopied } from "@/lib/notify";
 import {
+  Button,
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
@@ -18,11 +30,19 @@ import {
   ContextMenuSeparator,
   ContextMenuShortcut,
 } from "@opskat/ui";
+import { Copy, Search } from "lucide-react";
 import { TerminalSearchBar } from "./TerminalSearchBar";
+import { getTerminalContextMenuAction } from "./terminalContextMenuPolicy";
 import { useSFTPStore } from "@/stores/sftpStore";
 import { useTabStore } from "@/stores/tabStore";
-import { bytesToBase64 } from "@/lib/terminalEncode";
-import { getOrCreateTerminal, getTerminalInstance, terminalUrlHighlightColor } from "./terminalRegistry";
+import {
+  getOrCreateTerminal,
+  getTerminalInstance,
+  pasteFromClipboard,
+  terminalUrlHighlightColor,
+  uploadFilesWithRz,
+} from "./terminalRegistry";
+import { registerTerminalFileDropTarget } from "./terminalFileDropCoordinator";
 
 export interface TerminalHandle {
   toggleSearch: () => void;
@@ -42,7 +62,14 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const fitAddonRef = useRef<FitAddon | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const [searchRequest, setSearchRequest] = useState<{ query: string | null; token: number }>({
+    query: null,
+    token: 0,
+  });
   const [hasSelection, setHasSelection] = useState(false);
+  const [floatingCopyPosition, setFloatingCopyPosition] = useState<{ left: number; top: number } | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const lastAutoCopiedSelectionRef = useRef("");
   const shortcuts = useShortcutStore((s) => s.shortcuts);
   const fontSize = useTerminalThemeStore((s) => s.fontSize);
   const fontFamily = useTerminalThemeStore((s) => s.fontFamily);
@@ -50,6 +77,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   const enableImagePreview = useTerminalThemeStore((s) => s.enableImagePreview);
   const webglEnabled = useTerminalThemeStore((s) => s.webglEnabled);
   const highlightLinks = useTerminalThemeStore((s) => s.highlightLinks);
+  const copyBehavior = useTerminalThemeStore((s) => s.copyBehavior);
   const selectedThemeId = useTerminalThemeStore((s) => s.selectedThemeId);
   const customThemes = useTerminalThemeStore((s) => s.customThemes);
   const resolvedTheme = useResolvedTheme();
@@ -63,26 +91,55 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     return theme ? toXtermTheme(theme) : undefined;
   }, [selectedThemeId, customThemes, resolvedTheme]);
   const spec = TRANSPORTS[transport];
+  const paneConnected = useTerminalStore((s) => s.tabData[tabId]?.panes[sessionId]?.connected ?? false);
+  const terminalDropEnabled = active && paneConnected && transport === "ssh";
 
   useImperativeHandle(ref, () => ({
-    toggleSearch: () => setShowSearch((v) => !v),
+    toggleSearch: () => {
+      setSearchRequest((req) => ({ query: null, token: req.token + 1 }));
+      setShowSearch((v) => !v);
+    },
   }));
 
-  const handleCopy = useCallback(() => {
-    const selection = termRef.current?.getSelection();
-    if (selection) {
-      navigator.clipboard.writeText(selection);
-      notifyCopied(t("ssh.contextMenu.copied"));
-    }
-  }, [t]);
+  const copyText = useCallback(
+    (selection: string) => {
+      ClipboardSetText(selection)
+        .then(() => notifyCopied(t("ssh.contextMenu.copied")))
+        .catch(console.error);
+      lastAutoCopiedSelectionRef.current = selection;
+      return true;
+    },
+    [t]
+  );
 
-  const handlePaste = useCallback(() => {
-    navigator.clipboard.readText().then((text) => {
-      if (text && termRef.current) {
-        TRANSPORTS[transport].write(sessionId, bytesToBase64(new TextEncoder().encode(text))).catch(console.error);
-      }
-    });
-  }, [transport, sessionId]);
+  const copySelection = useCallback(() => {
+    const selection = termRef.current?.getSelection();
+    if (!selection) return false;
+    return copyText(selection);
+  }, [copyText]);
+
+  const handleCopy = useCallback(() => {
+    copySelection();
+  }, [copySelection]);
+
+  const openSearch = useCallback((query: string | null = null) => {
+    setSearchRequest((req) => ({ query, token: req.token + 1 }));
+    setShowSearch(true);
+  }, []);
+
+  const handleFindSelection = useCallback(() => {
+    const selection = termRef.current?.getSelection();
+    if (!selection) return;
+    openSearch(selection);
+  }, [openSearch]);
+
+  const handlePaste = useCallback(
+    (opts?: { suppressNativePaste?: boolean }) => {
+      const paste = opts ? pasteFromClipboard(sessionId, opts) : pasteFromClipboard(sessionId);
+      paste.catch(console.error);
+    },
+    [sessionId]
+  );
 
   const handleSelectAll = useCallback(() => {
     termRef.current?.selectAll();
@@ -122,19 +179,20 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       }
     });
 
-    inst.bridge.setOnFilter(() => setShowSearch((v) => !v));
     inst.bridge.setOnCopy(() => {
-      const selection = inst.term.getSelection();
-      if (selection) {
-        navigator.clipboard.writeText(selection);
-        notifyCopied(t("ssh.contextMenu.copied"));
-        return true;
-      }
-      return false;
+      return copySelection();
     });
+    inst.bridge.setOnPaste(() => handlePaste({ suppressNativePaste: true }));
+    inst.bridge.setOnSelectAll(() => handleSelectAll());
+    inst.bridge.setOnFind(() => openSearch());
 
     const selDispose = inst.term.onSelectionChange(() => {
-      setHasSelection(!!inst.term.getSelection());
+      const nextSelection = inst.term.getSelection();
+      setHasSelection(!!nextSelection);
+      if (!nextSelection) {
+        setFloatingCopyPosition(null);
+        lastAutoCopiedSelectionRef.current = "";
+      }
     });
     setHasSelection(!!inst.term.getSelection());
 
@@ -158,8 +216,12 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
       resizeObserver.disconnect();
       const stillAlive = getTerminalInstance(sessionId) === inst;
       if (stillAlive) {
-        inst.bridge.setOnFilter(() => {});
+        // Drop callback closures so toast/setShowSearch can be GC'd;
+        // bridge keeps a single handler slot, just reset to no-ops.
         inst.bridge.setOnCopy(() => false);
+        inst.bridge.setOnPaste(() => {});
+        inst.bridge.setOnSelectAll(() => {});
+        inst.bridge.setOnFind(() => {});
       }
       if (overlayRef.current) {
         inst.imageController.detachOverlay(overlayRef.current);
@@ -203,12 +265,82 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
     }
   }, [active, sessionId]);
 
-  const paneConnected = useTerminalStore((s) => s.tabData[tabId]?.panes[sessionId]?.connected ?? false);
+  useEffect(() => {
+    if (!terminalDropEnabled) {
+      setIsDragOver(false);
+      return;
+    }
+    return registerTerminalFileDropTarget({
+      getRect: () => wrapperRef.current?.getBoundingClientRect(),
+      uploadFiles: (paths) => {
+        setIsDragOver(false);
+        void uploadFilesWithRz(sessionId, paths);
+      },
+    });
+  }, [sessionId, terminalDropEnabled]);
+
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || !terminalDropEnabled) return;
+    const observer = new MutationObserver(() => {
+      setIsDragOver(el.classList.contains("wails-drop-target-active"));
+    });
+    observer.observe(el, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [terminalDropEnabled]);
+
   const splitPane = useTerminalStore((s) => s.splitPane);
   const reconnect = useTerminalStore((s) => s.reconnect);
   const closePane = useTerminalStore((s) => s.closePane);
   const toggleFileManager = useSFTPStore((s) => s.toggleFileManager);
   const closeTab = useTabStore((s) => s.closeTab);
+
+  const handleTerminalMouseUp = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if ((event.target as HTMLElement).closest("[data-terminal-selection-toolbar]")) return;
+      requestAnimationFrame(() => {
+        const wrapper = wrapperRef.current;
+        const selection = termRef.current?.getSelection();
+        setHasSelection(!!selection);
+        if (!wrapper || !selection) {
+          setFloatingCopyPosition(null);
+          return;
+        }
+        if (copyBehavior === "select-copy-right-paste") {
+          if (lastAutoCopiedSelectionRef.current !== selection) copySelection();
+          setFloatingCopyPosition(null);
+          return;
+        }
+        if (copyBehavior !== "popover-menu") {
+          setFloatingCopyPosition(null);
+          return;
+        }
+
+        const rect = wrapper.getBoundingClientRect();
+        const left = Math.min(Math.max(event.clientX - rect.left, 36), Math.max(36, rect.width - 36));
+        const top = Math.min(Math.max(event.clientY - rect.top - 40, 8), Math.max(8, rect.height - 40));
+        setFloatingCopyPosition({ left, top });
+      });
+    },
+    [copyBehavior, copySelection]
+  );
+
+  const handleTerminalContextMenuCapture = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      const selection = termRef.current?.getSelection();
+      const action = getTerminalContextMenuAction(copyBehavior, selection);
+      if (action === "menu") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (action === "copy" && selection) {
+        copyText(selection);
+      } else {
+        handlePaste();
+      }
+      requestAnimationFrame(() => termRef.current?.focus());
+    },
+    [copyBehavior, copyText, handlePaste]
+  );
 
   return (
     <div className="relative h-full w-full flex flex-col">
@@ -219,6 +351,8 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
           termRef.current?.focus();
         }}
         searchAddon={searchAddonRef.current}
+        initialQuery={searchRequest.query}
+        initialQueryToken={searchRequest.token}
       />
       <ContextMenu
         onOpenChange={(open) => {
@@ -228,27 +362,89 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
         }}
       >
         <ContextMenuTrigger className="flex-1 min-h-0">
-          <div ref={wrapperRef} className="relative h-full w-full" style={{ padding: "4px" }}>
+          <div
+            ref={wrapperRef}
+            className="relative h-full w-full"
+            onMouseDown={() => setFloatingCopyPosition(null)}
+            onMouseUp={handleTerminalMouseUp}
+            onContextMenuCapture={handleTerminalContextMenuCapture}
+            style={{ padding: "4px", "--wails-drop-target": terminalDropEnabled ? "drop" : undefined } as CSSProperties}
+          >
             <div ref={overlayRef} className="pointer-events-none absolute inset-0 z-20 overflow-hidden" />
+            {hasSelection && floatingCopyPosition && (
+              <div
+                data-terminal-selection-toolbar
+                className="absolute z-20 h-8 gap-1.5 shadow-md"
+                style={{
+                  left: floatingCopyPosition.left,
+                  top: floatingCopyPosition.top,
+                  transform: "translateX(-50%)",
+                }}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onMouseUp={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+              >
+                <div className="flex h-8 items-center rounded-md border bg-popover p-0.5 text-popover-foreground shadow-md">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    title={t("ssh.contextMenu.copy")}
+                    aria-label={t("ssh.contextMenu.copy")}
+                    onClick={handleCopy}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    title={t("ssh.contextMenu.find")}
+                    aria-label={t("ssh.contextMenu.find")}
+                    onClick={handleFindSelection}
+                  >
+                    <Search className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            {isDragOver && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary/5 border-2 border-dashed border-primary/30 rounded animate-in fade-in-0 duration-150">
+                <div className="rounded-md bg-background/90 px-3 py-2 text-xs text-primary shadow-sm">
+                  {t("zmodem.dragToUpload")}
+                </div>
+              </div>
+            )}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent>
           <ContextMenuItem onClick={handleCopy} disabled={!hasSelection}>
             {t("ssh.contextMenu.copy")}
-            <ContextMenuShortcut>{formatModKey("KeyC")}</ContextMenuShortcut>
+            <ContextMenuShortcut>{formatBinding(shortcuts["terminal.copy"])}</ContextMenuShortcut>
           </ContextMenuItem>
-          <ContextMenuItem onClick={handlePaste}>
+          <ContextMenuItem onClick={() => handlePaste()}>
             {t("ssh.contextMenu.paste")}
-            <ContextMenuShortcut>{formatModKey("KeyV")}</ContextMenuShortcut>
+            <ContextMenuShortcut>{formatBinding(shortcuts["terminal.paste"])}</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={handleSelectAll}>
             {t("ssh.contextMenu.selectAll")}
-            <ContextMenuShortcut>{formatModKey("KeyA")}</ContextMenuShortcut>
+            <ContextMenuShortcut>{formatBinding(shortcuts["terminal.selectAll"])}</ContextMenuShortcut>
           </ContextMenuItem>
-          <ContextMenuItem onClick={() => setShowSearch(true)}>
+          <ContextMenuItem onClick={() => openSearch()}>
             {t("ssh.contextMenu.find")}
-            <ContextMenuShortcut>{formatBinding(shortcuts["panel.filter"])}</ContextMenuShortcut>
+            <ContextMenuShortcut>{formatBinding(shortcuts["terminal.find"])}</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => splitPane(tabId, "horizontal")} disabled={!paneConnected || !spec.canSplit}>
