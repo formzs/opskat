@@ -1,6 +1,7 @@
 package asset_entity
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/smartystreets/goconvey/convey"
@@ -489,6 +490,7 @@ func TestValidateDatabaseMSSQL(t *testing.T) {
 
 func TestValidateDatabaseSQLite(t *testing.T) {
 	convey.Convey("SQLite driver validation", t, func() {
+		localSQLitePath := filepath.Join(t.TempDir(), "x.db")
 		convey.Convey("缺 path 应报错", func() {
 			a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
 			cfg := &DatabaseConfig{Driver: DriverSQLite}
@@ -506,7 +508,7 @@ func TestValidateDatabaseSQLite(t *testing.T) {
 				Type: AssetTypeDatabase, Name: "x", GroupID: 1,
 				SSHTunnelID: 5,
 			}
-			cfg := &DatabaseConfig{Driver: DriverSQLite, Path: "/tmp/x.db"}
+			cfg := &DatabaseConfig{Driver: DriverSQLite, Path: localSQLitePath}
 			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
 			convey.So(a.Validate().Error(), convey.ShouldContainSubstring, "隧道")
 		})
@@ -536,7 +538,7 @@ func TestValidateDatabaseSQLite(t *testing.T) {
 		})
 		convey.Convey("绝对路径 + 无隧道通过", func() {
 			a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
-			cfg := &DatabaseConfig{Driver: DriverSQLite, Path: "/tmp/x.db"}
+			cfg := &DatabaseConfig{Driver: DriverSQLite, Path: localSQLitePath}
 			convey.So(a.SetDatabaseConfig(cfg), convey.ShouldBeNil)
 			convey.So(a.Validate(), convey.ShouldBeNil)
 		})

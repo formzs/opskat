@@ -1,6 +1,7 @@
 package asset_entity
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,11 +53,19 @@ func TestProxyConfigRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, cfg.Proxy, got.Proxy)
 	})
+	t.Run("k8s", func(t *testing.T) {
+		a := &Asset{Type: AssetTypeK8s}
+		cfg := &K8sConfig{Kubeconfig: "enc-kubeconfig", Namespace: "prod", Proxy: sampleProxy()}
+		require.NoError(t, a.SetK8sConfig(cfg))
+		got, err := a.GetK8sConfig()
+		require.NoError(t, err)
+		assert.Equal(t, cfg.Proxy, got.Proxy)
+	})
 }
 
 func TestValidateDatabaseSQLiteRejectsProxy(t *testing.T) {
 	a := &Asset{Type: AssetTypeDatabase, Name: "x", GroupID: 1}
-	cfg := &DatabaseConfig{Driver: DriverSQLite, Path: "/tmp/x.db", Proxy: sampleProxy()}
+	cfg := &DatabaseConfig{Driver: DriverSQLite, Path: filepath.Join(t.TempDir(), "x.db"), Proxy: sampleProxy()}
 	require.NoError(t, a.SetDatabaseConfig(cfg))
 	err := a.Validate()
 	require.Error(t, err)
